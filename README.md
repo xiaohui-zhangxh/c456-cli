@@ -129,6 +129,8 @@ bun run build
 node dist/index.js --help
 ```
 
+构建、发布与 **AI Agent 技能**（`npx skills add … --skill c456-cli`）见 [DEVELOPMENT.md](./DEVELOPMENT.md)。
+
 ## 许可证
 
 MIT
