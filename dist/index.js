@@ -10,7 +10,7 @@ var package_default = {
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
-    c456: "./dist/index.js"
+    c456: "dist/index.js"
   },
   files: [
     "dist",
@@ -41,7 +41,7 @@ var package_default = {
   homepage: "https://github.com/xiaohui-zhangxh/c456#c456-cli",
   repository: {
     type: "git",
-    url: "https://github.com/xiaohui-zhangxh/c456.git",
+    url: "git+https://github.com/xiaohui-zhangxh/c456.git",
     directory: "c456-cli"
   }
 };

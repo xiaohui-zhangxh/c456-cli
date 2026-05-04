@@ -4,7 +4,7 @@
   "description": "C456 CLI - 内容录入与整理工具",
   "type": "module",
   "bin": {
-    "c456": "./dist/index.js"
+    "c456": "dist/index.js"
   },
   "files": [
     "dist",
@@ -35,7 +35,7 @@
   "homepage": "https://github.com/xiaohui-zhangxh/c456#c456-cli",
   "repository": {
     "type": "git",
-    "url": "https://github.com/xiaohui-zhangxh/c456.git",
+    "url": "git+https://github.com/xiaohui-zhangxh/c456.git",
     "directory": "c456-cli"
   }
 }
