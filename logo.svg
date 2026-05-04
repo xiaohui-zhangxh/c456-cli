@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d">
+  <title id="t">C456</title>
+  <desc id="d">Light UI; same geometry as logo-dark.svg with dark ink on light plate.</desc>
+  <rect width="512" height="512" rx="112" fill="#FAFAFA"/>
+  <g fill="#18181B">
+    <path
+      transform="rotate(-15 256 256)"
+      d="M 384.6 102.8 A 200 200 0 1 0 384.6 409.2"
+      fill="none"
+      stroke="#18181B"
+      stroke-width="36"
+      stroke-linecap="round"
+    />
+    <g>
+      <rect x="172" y="266" width="48" height="64" rx="9"/>
+      <rect x="232" y="234" width="48" height="96" rx="9"/>
+      <rect x="292" y="202" width="48" height="128" rx="9"/>
+      <rect x="292" y="146" width="48" height="48" rx="9" fill="#fa9704"/>
+    </g>
+    <g
+      font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+      font-size="48"
+      font-weight="600"
+      text-anchor="middle"
+    >
+      <text x="195" y="380">4</text>
+      <text x="257" y="380">5</text>
+      <text x="315" y="380">6</text>
+    </g>
+  </g>
+</svg>
