@@ -76,3 +76,14 @@ npx skills add . --skill c456-cli -y
 ## 更完整的说明
 
 见各命令的 `--help` 与本仓库 `README.md`、`DEVELOPMENT.md`。
+
+### 分页参数（list 类命令）
+
+- `-p, --page`: **1-10000**
+- `-n, --per-page`: **1-100**（默认 20；服务端会截断到最大值）
+
+### 内容语法（富文本）
+
+CLI `--help` 中会用 `type: <type_name>` 标注字段类型；Agent 在生成/写入内容时，必须按下表选择语法与约束：
+
+- `markdown_kramdown` → `references/content-syntax-kramdown.md`

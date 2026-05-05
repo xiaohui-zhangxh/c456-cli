@@ -8,6 +8,7 @@ import intakeCmd from "./commands/intake.js";
 import fetchProfile from "./commands/fetch.js";
 import searchCmd from "./commands/search.js";
 import playbookCmd from "./commands/playbook.js";
+import walkthroughCmd from "./commands/walkthrough.js";
 import configCmd from "./commands/config.js";
 import { getHelpBanner } from "./banner.js";
 
@@ -31,6 +32,7 @@ program.addCommand(intakeCmd);
 program.addCommand(fetchProfile);
 program.addCommand(searchCmd);
 program.addCommand(playbookCmd);
+program.addCommand(walkthroughCmd);
 program.addCommand(configCmd);
 
 // 帮助信息增强

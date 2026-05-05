@@ -139,6 +139,41 @@ export class ApiClient {
   }
 
   /**
+   * POST multipart/form-data（用于上传文件）
+   * @param {string} path
+   * @param {Record<string, any>} fields
+   * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
+   */
+  async postMultipart(path, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const form = new FormData();
+    Object.entries(fields || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      form.append(k, String(v));
+    });
+
+    if (file && file.filePath) {
+      const fs = await import("node:fs");
+      const pathMod = await import("node:path");
+      const bytes = fs.readFileSync(file.filePath);
+      const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
+      const name = file.filename || pathMod.basename(file.filePath);
+      form.append(file.fieldName, blob, name);
+    }
+
+    const headers = { ...this.headers() };
+    // fetch 会自动设置 multipart boundary；手动设置会导致 boundary 丢失
+    delete headers["Content-Type"];
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    return this.handleResponse(res);
+  }
+
+  /**
    * PATCH 请求
    */
   async patch(path, body = {}) {
@@ -147,6 +182,40 @@ export class ApiClient {
       method: "PATCH",
       headers: this.headers(),
       body: JSON.stringify(body),
+    });
+    return this.handleResponse(res);
+  }
+
+  /**
+   * PATCH multipart/form-data（用于上传文件）
+   * @param {string} path
+   * @param {Record<string, any>} fields
+   * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
+   */
+  async patchMultipart(path, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const form = new FormData();
+    Object.entries(fields || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      form.append(k, String(v));
+    });
+
+    if (file && file.filePath) {
+      const fs = await import("node:fs");
+      const pathMod = await import("node:path");
+      const bytes = fs.readFileSync(file.filePath);
+      const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
+      const name = file.filename || pathMod.basename(file.filePath);
+      form.append(file.fieldName, blob, name);
+    }
+
+    const headers = { ...this.headers() };
+    delete headers["Content-Type"];
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: form,
     });
     return this.handleResponse(res);
   }

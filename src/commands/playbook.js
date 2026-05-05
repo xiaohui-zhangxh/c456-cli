@@ -11,7 +11,7 @@ playbookCmd
   .command("new")
   .description("创建新打法")
   .requiredOption("-t, --title <title>", "打法标题")
-  .option("-b, --body <text>", "打法正文（Markdown）")
+  .option("-b, --body <text>", "打法正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
   .option("--ref-intake <id>", "引用收录 ID（可多次指定）")
   .option("--ref-playbook <id>", "引用打法 ID（可多次指定）")
   .action(async (opts, cmd) => {
@@ -105,7 +105,7 @@ playbookCmd
   .description("更新打法")
   .argument("<id>", "打法 ID")
   .option("-t, --title <title>", "新标题")
-  .option("-b, --body <text>", "新正文")
+  .option("-b, --body <text>", "新正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
   .action(async (id, opts, cmd) => {
     const { apiKey, client } = resolveApi(cmd);
 
@@ -172,8 +172,8 @@ playbookCmd
   .command("list")
   .description("列出打法（分页）")
   .option("-q, --query <text>", "搜索关键词")
-  .option("-p, --page <num>", "页码", "1")
-  .option("-n, --per-page <num>", "每页数量", "20")
+  .option("-p, --page <num>", "页码（1-10000）", "1")
+  .option("-n, --per-page <num>", "每页数量（1-100，默认 20）", "20")
   .action(async (opts, cmd) => {
     const { apiKey, client } = resolveApi(cmd);
 

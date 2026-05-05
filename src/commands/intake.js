@@ -13,7 +13,7 @@ intake
   .option("-u, --url <url>", "目标 URL（tool/channel 时可选，用于自动解析资料）")
   .option("-k, --kind <type>", "类型：signal/tool/channel（默认 signal）", "signal")
   .option("-t, --title <title>", "标题（tool/channel 必填）")
-  .option("-b, --body <text>", "正文/描述")
+  .option("-b, --body <text>", "正文/描述（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
   .option("--profile-data-json <json>", "资料段 JSON（tool/channel）")
   .action(async (opts, cmd) => {
     const { apiKey, baseUrl, client } = resolveApi(cmd);
@@ -100,7 +100,7 @@ intake
   .description("更新收录")
   .argument("<id>", "收录 ID")
   .option("-t, --title <title>", "新标题")
-  .option("-b, --body <text>", "新正文")
+  .option("-b, --body <text>", "新正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
   .option("--favorited", "标记为收藏")
   .option("--unfavorited", "取消收藏")
   .action(async (id, opts, cmd) => {
@@ -172,8 +172,8 @@ intake
   .description("列出收录（分页）")
   .option("-k, --kind <type>", "类型过滤：signal/tool/channel")
   .option("-q, --query <text>", "搜索关键词")
-  .option("-p, --page <num>", "页码", "1")
-  .option("-n, --per-page <num>", "每页数量", "20")
+  .option("-p, --page <num>", "页码（1-10000）", "1")
+  .option("-n, --per-page <num>", "每页数量（1-100，默认 20）", "20")
   .action(async (opts, cmd) => {
     const { apiKey, client } = resolveApi(cmd);
 

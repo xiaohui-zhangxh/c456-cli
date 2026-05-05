@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 // src/index.js
-import { Command as Command6 } from "commander";
+import { Command as Command7 } from "commander";
 
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.1.0",
+  version: "0.1.1",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -148,6 +148,36 @@ var ApiClient = class {
     return this.handleResponse(res);
   }
   /**
+   * POST multipart/form-data（用于上传文件）
+   * @param {string} path
+   * @param {Record<string, any>} fields
+   * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
+   */
+  async postMultipart(path, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const form = new FormData();
+    Object.entries(fields || {}).forEach(([k, v]) => {
+      if (v === void 0 || v === null) return;
+      form.append(k, String(v));
+    });
+    if (file && file.filePath) {
+      const fs = await import("node:fs");
+      const pathMod = await import("node:path");
+      const bytes = fs.readFileSync(file.filePath);
+      const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
+      const name = file.filename || pathMod.basename(file.filePath);
+      form.append(file.fieldName, blob, name);
+    }
+    const headers = { ...this.headers() };
+    delete headers["Content-Type"];
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: form
+    });
+    return this.handleResponse(res);
+  }
+  /**
    * PATCH 请求
    */
   async patch(path, body = {}) {
@@ -156,6 +186,36 @@ var ApiClient = class {
       method: "PATCH",
       headers: this.headers(),
       body: JSON.stringify(body)
+    });
+    return this.handleResponse(res);
+  }
+  /**
+   * PATCH multipart/form-data（用于上传文件）
+   * @param {string} path
+   * @param {Record<string, any>} fields
+   * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
+   */
+  async patchMultipart(path, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const form = new FormData();
+    Object.entries(fields || {}).forEach(([k, v]) => {
+      if (v === void 0 || v === null) return;
+      form.append(k, String(v));
+    });
+    if (file && file.filePath) {
+      const fs = await import("node:fs");
+      const pathMod = await import("node:path");
+      const bytes = fs.readFileSync(file.filePath);
+      const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
+      const name = file.filename || pathMod.basename(file.filePath);
+      form.append(file.fieldName, blob, name);
+    }
+    const headers = { ...this.headers() };
+    delete headers["Content-Type"];
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: form
     });
     return this.handleResponse(res);
   }
@@ -212,7 +272,7 @@ function resolveApi(cmd) {
 
 // src/commands/intake.js
 var intake = new Command().name("intake").description("\u6536\u5F55\u7BA1\u7406 - \u521B\u5EFA\u3001\u66F4\u65B0\u3001\u5220\u9664\u5DE5\u5177/\u6E20\u9053/\u4FE1\u53F7");
-intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, --url <url>", "\u76EE\u6807 URL\uFF08tool/channel \u65F6\u53EF\u9009\uFF0C\u7528\u4E8E\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\uFF1Asignal/tool/channel\uFF08\u9ED8\u8BA4 signal\uFF09", "signal").option("-t, --title <title>", "\u6807\u9898\uFF08tool/channel \u5FC5\u586B\uFF09").option("-b, --body <text>", "\u6B63\u6587/\u63CF\u8FF0").option("--profile-data-json <json>", "\u8D44\u6599\u6BB5 JSON\uFF08tool/channel\uFF09").action(async (opts, cmd) => {
+intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, --url <url>", "\u76EE\u6807 URL\uFF08tool/channel \u65F6\u53EF\u9009\uFF0C\u7528\u4E8E\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\uFF1Asignal/tool/channel\uFF08\u9ED8\u8BA4 signal\uFF09", "signal").option("-t, --title <title>", "\u6807\u9898\uFF08tool/channel \u5FC5\u586B\uFF09").option("-b, --body <text>", "\u6B63\u6587/\u63CF\u8FF0\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--profile-data-json <json>", "\u8D44\u6599\u6BB5 JSON\uFF08tool/channel\uFF09").action(async (opts, cmd) => {
   const { apiKey, baseUrl, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -271,7 +331,7 @@ intake.command("show").description("\u67E5\u770B\u6536\u5F55\u8BE6\u60C5").argum
     process.exit(1);
   }
 });
-intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
+intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -318,7 +378,7 @@ intake.command("delete").description("\u5220\u9664\u6536\u5F55").argument("<id>"
     process.exit(1);
   }
 });
-intake.command("list").description("\u5217\u51FA\u6536\u5F55\uFF08\u5206\u9875\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\u8FC7\u6EE4\uFF1Asignal/tool/channel").option("-q, --query <text>", "\u641C\u7D22\u5173\u952E\u8BCD").option("-p, --page <num>", "\u9875\u7801", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6570\u91CF", "20").action(async (opts, cmd) => {
+intake.command("list").description("\u5217\u51FA\u6536\u5F55\uFF08\u5206\u9875\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\u8FC7\u6EE4\uFF1Asignal/tool/channel").option("-q, --query <text>", "\u641C\u7D22\u5173\u952E\u8BCD").option("-p, --page <num>", "\u9875\u7801\uFF081-10000\uFF09", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6570\u91CF\uFF081-100\uFF0C\u9ED8\u8BA4 20\uFF09", "20").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -473,7 +533,7 @@ var search_default = searchCmd;
 // src/commands/playbook.js
 import { Command as Command4 } from "commander";
 var playbookCmd = new Command4().name("playbook").description("\u6253\u6CD5\u7BA1\u7406 - \u521B\u5EFA\u3001\u66F4\u65B0\u3001\u5220\u9664\u6253\u6CD5");
-playbookCmd.command("new").description("\u521B\u5EFA\u65B0\u6253\u6CD5").requiredOption("-t, --title <title>", "\u6253\u6CD5\u6807\u9898").option("-b, --body <text>", "\u6253\u6CD5\u6B63\u6587\uFF08Markdown\uFF09").option("--ref-intake <id>", "\u5F15\u7528\u6536\u5F55 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").option("--ref-playbook <id>", "\u5F15\u7528\u6253\u6CD5 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").action(async (opts, cmd) => {
+playbookCmd.command("new").description("\u521B\u5EFA\u65B0\u6253\u6CD5").requiredOption("-t, --title <title>", "\u6253\u6CD5\u6807\u9898").option("-b, --body <text>", "\u6253\u6CD5\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--ref-intake <id>", "\u5F15\u7528\u6536\u5F55 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").option("--ref-playbook <id>", "\u5F15\u7528\u6253\u6CD5 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -539,7 +599,7 @@ ${data.body || "(\u65E0)"}`);
     process.exit(1);
   }
 });
-playbookCmd.command("update").description("\u66F4\u65B0\u6253\u6CD5").argument("<id>", "\u6253\u6CD5 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587").action(async (id, opts, cmd) => {
+playbookCmd.command("update").description("\u66F4\u65B0\u6253\u6CD5").argument("<id>", "\u6253\u6CD5 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -584,7 +644,7 @@ playbookCmd.command("delete").description("\u5220\u9664\u6253\u6CD5").argument("
     process.exit(1);
   }
 });
-playbookCmd.command("list").description("\u5217\u51FA\u6253\u6CD5\uFF08\u5206\u9875\uFF09").option("-q, --query <text>", "\u641C\u7D22\u5173\u952E\u8BCD").option("-p, --page <num>", "\u9875\u7801", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6570\u91CF", "20").action(async (opts, cmd) => {
+playbookCmd.command("list").description("\u5217\u51FA\u6253\u6CD5\uFF08\u5206\u9875\uFF09").option("-q, --query <text>", "\u641C\u7D22\u5173\u952E\u8BCD").option("-p, --page <num>", "\u9875\u7801\uFF081-10000\uFF09", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6570\u91CF\uFF081-100\uFF0C\u9ED8\u8BA4 20\uFF09", "20").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -614,9 +674,170 @@ playbookCmd.command("list").description("\u5217\u51FA\u6253\u6CD5\uFF08\u5206\u9
 });
 var playbook_default = playbookCmd;
 
-// src/commands/config.js
+// src/commands/walkthrough.js
 import { Command as Command5 } from "commander";
-var configCmd = new Command5().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740");
+var walkthroughCmd = new Command5().name("walkthrough").description("\u8BB2\u89E3\uFF08Walkthrough\uFF09\u7BA1\u7406 - \u521B\u5EFA\u3001\u66F4\u65B0\u3001\u5220\u9664\u8BB2\u89E3");
+function requireApiKey(apiKey) {
+  if (!apiKey) {
+    console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
+    process.exit(1);
+  }
+}
+function ensureSourceKind(kind) {
+  const k = String(kind || "").trim() || "upload";
+  if (!["upload", "external_url"].includes(k)) {
+    console.error("\u9519\u8BEF\uFF1A--source-kind \u4EC5\u652F\u6301 upload \u6216 external_url");
+    process.exit(1);
+  }
+  return k;
+}
+function buildWalkthroughFields(opts) {
+  const w = {};
+  if (opts.title !== void 0) w.title = opts.title;
+  if (opts.summary !== void 0) w.summary = opts.summary;
+  if (opts.body !== void 0) w.body = opts.body;
+  if (opts.sourceKind !== void 0) w.source_kind = opts.sourceKind;
+  if (opts.externalUrl !== void 0) w.external_url = opts.externalUrl;
+  if (opts.posterAt !== void 0) w.poster_preview_at_seconds = opts.posterAt;
+  if (opts.publicationStatus !== void 0) w.publication_status = opts.publicationStatus;
+  return w;
+}
+walkthroughCmd.command("new").description("\u521B\u5EFA\u65B0\u8BB2\u89E3").requiredOption("-t, --title <title>", "\u6807\u9898").option("-s, --summary <text>", "\u6458\u8981").option("-b, --body <text>", "\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url\uFF08\u9ED8\u8BA4 upload\uFF09", "upload").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url \u65F6\u5FC5\u586B\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08source-kind=upload \u65F6\u5FC5\u586B\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey(apiKey);
+  const sourceKind = ensureSourceKind(opts.sourceKind);
+  const posterAt = opts.posterAt !== void 0 ? Number.parseInt(String(opts.posterAt), 10) : void 0;
+  const w = {
+    title: opts.title,
+    summary: opts.summary || "",
+    body: opts.body || "",
+    source_kind: sourceKind,
+    external_url: opts.externalUrl || "",
+    poster_preview_at_seconds: Number.isFinite(posterAt) ? posterAt : void 0
+  };
+  if (sourceKind === "external_url") {
+    if (!w.external_url) {
+      console.error("\u9519\u8BEF\uFF1Asource-kind=external_url \u65F6\u5FC5\u987B\u63D0\u4F9B --external-url");
+      process.exit(1);
+    }
+    const result2 = await client.post("/walkthroughs", { walkthrough: w });
+    console.log("\u2705 \u8BB2\u89E3\u521B\u5EFA\u6210\u529F");
+    console.log(`   ID: ${result2.data.id}`);
+    console.log(`   \u6807\u9898\uFF1A${result2.data.title}`);
+    return;
+  }
+  if (!opts.castFile) {
+    console.error("\u9519\u8BEF\uFF1Asource-kind=upload \u65F6\u5FC5\u987B\u63D0\u4F9B --cast-file");
+    process.exit(1);
+  }
+  const fields = {
+    "walkthrough[title]": w.title,
+    "walkthrough[summary]": w.summary,
+    "walkthrough[body]": w.body,
+    "walkthrough[source_kind]": "upload"
+  };
+  if (w.poster_preview_at_seconds !== void 0) {
+    fields["walkthrough[poster_preview_at_seconds]"] = w.poster_preview_at_seconds;
+  }
+  const result = await client.postMultipart(
+    "/walkthroughs",
+    fields,
+    { fieldName: "walkthrough[cast_file]", filePath: opts.castFile, filename: "upload.cast" }
+  );
+  console.log("\u2705 \u8BB2\u89E3\u521B\u5EFA\u6210\u529F");
+  console.log(`   ID: ${result.data.id}`);
+  console.log(`   \u6807\u9898\uFF1A${result.data.title}`);
+});
+walkthroughCmd.command("list").description("\u5217\u51FA\u8BB2\u89E3\uFF08\u5206\u9875\uFF09").option("-q, --query <text>", "\u641C\u7D22\u5173\u952E\u8BCD").option("-p, --page <num>", "\u9875\u7801\uFF081-10000\uFF09", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6570\u91CF\uFF081-100\uFF0C\u9ED8\u8BA4 20\uFF09", "20").action(async (opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey(apiKey);
+  const result = await client.get("/walkthroughs", {
+    q: opts.query,
+    page: opts.page,
+    per_page: opts.perPage
+  });
+  const { data, meta } = result;
+  const perPage = metaPerPage(meta);
+  const totalPages = Math.max(1, Math.ceil(meta.total / perPage));
+  console.log(`\u5171 ${meta.total} \u6761\u8BB2\u89E3\uFF08\u7B2C ${meta.page}/${totalPages} \u9875\uFF09
+`);
+  data.forEach((w) => {
+    console.log(`\u{1F3AC} [${w.id}] ${w.title}`);
+    if (w.durationLabel) console.log(`   \u65F6\u957F\uFF1A${w.durationLabel}`);
+    if (w.summary) console.log(`   ${w.summary}`);
+  });
+});
+walkthroughCmd.command("show").description("\u67E5\u770B\u8BB2\u89E3\u8BE6\u60C5").argument("<id>", "\u8BB2\u89E3 ID").action(async (id, opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey(apiKey);
+  const result = await client.get(`/walkthroughs/${id}`);
+  const w = result.data;
+  console.log(`ID: ${w.id}`);
+  console.log(`\u6807\u9898\uFF1A${w.title}`);
+  console.log(`\u72B6\u6001\uFF1A${w.publicationStatus}`);
+  if (w.summary) console.log(`\u6458\u8981\uFF1A${w.summary}`);
+  console.log(`\u6B63\u6587\uFF1A
+${w.body || "(\u65E0)"}`);
+  console.log(`\u6765\u6E90\uFF1A${w.sourceKind}`);
+  if (w.src) console.log(`\u5A92\u4F53\uFF1A${w.src}`);
+});
+walkthroughCmd.command("update").description("\u66F4\u65B0\u8BB2\u89E3").argument("<id>", "\u8BB2\u89E3 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-s, --summary <text>", "\u65B0\u6458\u8981").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--publication-status <status>", "\u53D1\u5E03\u72B6\u6001\uFF1Apending_review/private").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08\u4E0A\u4F20\u66FF\u6362\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (id, opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey(apiKey);
+  const posterAt = opts.posterAt !== void 0 ? Number.parseInt(String(opts.posterAt), 10) : void 0;
+  const w = buildWalkthroughFields({
+    title: opts.title,
+    summary: opts.summary,
+    body: opts.body,
+    sourceKind: opts.sourceKind ? ensureSourceKind(opts.sourceKind) : void 0,
+    externalUrl: opts.externalUrl,
+    posterAt: Number.isFinite(posterAt) ? posterAt : void 0,
+    publicationStatus: opts.publicationStatus
+  });
+  const hasFile = Boolean(opts.castFile);
+  if (!hasFile) {
+    const result2 = await client.patch(`/walkthroughs/${id}`, { walkthrough: w });
+    console.log("\u2705 \u8BB2\u89E3\u66F4\u65B0\u6210\u529F");
+    console.log(`   \u6807\u9898\uFF1A${result2.data.title}`);
+    return;
+  }
+  const fields = {};
+  Object.entries(w).forEach(([k, v]) => {
+    fields[`walkthrough[${k}]`] = v;
+  });
+  const result = await client.patchMultipart(
+    `/walkthroughs/${id}`,
+    fields,
+    { fieldName: "walkthrough[cast_file]", filePath: opts.castFile, filename: "upload.cast" }
+  );
+  console.log("\u2705 \u8BB2\u89E3\u66F4\u65B0\u6210\u529F");
+  console.log(`   \u6807\u9898\uFF1A${result.data.title}`);
+});
+walkthroughCmd.command("delete").description("\u5220\u9664\u8BB2\u89E3").argument("<id>", "\u8BB2\u89E3 ID").option("-f, --force", "\u5F3A\u5236\u5220\u9664\uFF08\u65E0\u9700\u786E\u8BA4\uFF09").action(async (id, opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey(apiKey);
+  if (!opts.force) {
+    const readline = await import("node:readline");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise((resolve) => {
+      rl.question("\u786E\u8BA4\u5220\u9664\uFF1F(y/N): ", (ans) => {
+        rl.close();
+        resolve(ans.toLowerCase());
+      });
+    });
+    if (answer !== "y" && answer !== "yes") {
+      console.log("\u5DF2\u53D6\u6D88");
+      return;
+    }
+  }
+  await client.delete(`/walkthroughs/${id}`);
+  console.log("\u2705 \u8BB2\u89E3\u5DF2\u5220\u9664");
+});
+var walkthrough_default = walkthroughCmd;
+
+// src/commands/config.js
+import { Command as Command6 } from "commander";
+var configCmd = new Command6().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740");
 configCmd.command("set-key").description("\u8BBE\u7F6E API Key").argument("<token>", "API Key \u4EE4\u724C").action((token, cmd) => {
   const config = loadConfig();
   config.apiKey = token;
@@ -712,7 +933,7 @@ ${body}
 }
 
 // src/index.js
-var program = new Command6();
+var program = new Command7();
 program.name("c456").description("C456 CLI - \u5FEB\u901F\u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177").version(package_default.version);
 program.addHelpText("before", () => getHelpBanner());
 program.option(
@@ -723,6 +944,7 @@ program.addCommand(intake_default);
 program.addCommand(fetch_default);
 program.addCommand(search_default);
 program.addCommand(playbook_default);
+program.addCommand(walkthrough_default);
 program.addCommand(config_default);
 program.on("--help", () => {
   console.log("\n\u793A\u4F8B:");
