@@ -73,6 +73,13 @@ npx skills add . --skill c456-cli -y
 - `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）
 - `c456 fetch detect -u <url>`
 
+`profile_id` 类型含义：
+
+- `link_product`：产品/官网等普通链接页（解析 name/icon/description）
+- `package_registry`：软件包页（npm、RubyGems 等）
+- `github_origin`：代码仓库（GitHub/GitLab/Gitee）
+- `social_account`：社交账号主页/频道（YouTube/抖音/小红书等）
+
 ## 更完整的说明
 
 见各命令的 `--help` 与本仓库 `README.md`、`DEVELOPMENT.md`。

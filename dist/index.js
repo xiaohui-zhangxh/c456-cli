@@ -6,7 +6,7 @@ import { Command as Command7 } from "commander";
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.1.1",
+  version: "0.1.2",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -411,17 +411,23 @@ var intake_default = intake;
 // src/commands/fetch.js
 import { Command as Command2 } from "commander";
 var fetchProfile = new Command2().name("fetch").description("\u8D44\u6599\u6293\u53D6 - \u4ECE URL \u81EA\u52A8\u89E3\u6790\u5E73\u53F0\u8D44\u6599");
-fetchProfile.command("profile").description("\u6293\u53D6\u6307\u5B9A URL \u7684\u8D44\u6599\u6BB5\u6570\u636E").requiredOption("-u, --url <url>", "\u76EE\u6807 URL").option("-p, --profile-id <type>", "\u8D44\u6599\u7C7B\u578B\uFF1Alink_product/package_registry/github_origin/social_account").action(async (opts, cmd) => {
+fetchProfile.command("profile").description("\u6293\u53D6\u6307\u5B9A URL \u7684\u8D44\u6599\u6BB5\u6570\u636E").requiredOption("-u, --url <url>", "\u76EE\u6807 URL").requiredOption(
+  "-p, --profile-id <type>",
+  [
+    "\u8D44\u6599\u7C7B\u578B\uFF08\u5FC5\u586B\uFF09\uFF1A",
+    "- link_product\uFF1A\u666E\u901A\u4EA7\u54C1/\u5B98\u7F51\u94FE\u63A5\uFF08\u89E3\u6790\u540D\u79F0\u3001\u56FE\u6807\u3001\u7B80\u4ECB\u7B49\uFF09",
+    "- package_registry\uFF1A\u8F6F\u4EF6\u5305\u5730\u5740\uFF08npm/RubyGems \u7B49\uFF09",
+    "- github_origin\uFF1A\u5F00\u6E90\u4ED3\u5E93\u5730\u5740\uFF08GitHub/GitLab/Gitee\uFF09",
+    "- social_account\uFF1A\u793E\u4EA4\u8D26\u53F7\u4E3B\u9875/\u9891\u9053\uFF08YouTube/\u6296\u97F3/\u5C0F\u7EA2\u4E66\u7B49\uFF09"
+  ].join("\n")
+).action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
     process.exit(1);
   }
   try {
-    const body = { url: opts.url };
-    if (opts.profileId) {
-      body.profile_id = opts.profileId;
-    }
+    const body = { url: opts.url, profile_id: opts.profileId };
     const result = await client.post("/fetches", body);
     const { data, suggested_title } = result.data;
     console.log("\u2705 \u8D44\u6599\u6293\u53D6\u6210\u529F");
