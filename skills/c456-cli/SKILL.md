@@ -46,6 +46,7 @@ npx skills add . --skill c456-cli -y
 1. 需要真实读写 C456 时，在沙箱/终端中运行 `c456` 子命令，并解析其标准输出（含部分命令附带的 `--- JSON ---` 段）。
 2. 非交互场景为 `intake delete` 等加 **`-f` / `--force`**，避免等待终端确认（删除前仍应确认用户意图）。
 3. 勿在日志或回复中回显完整 API Key。
+4. **严禁编造参数**：只能使用 `c456 <command> --help`（或本仓库源码/文档）明确存在的选项；不确定时先运行 `--help` 再行动。
 
 ## 命令速查
 
@@ -72,6 +73,11 @@ npx skills add . --skill c456-cli -y
 
 - `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）
 - `c456 fetch detect -u <url>`
+
+`fetch detect` 说明：
+
+- 会调用 `POST /api/v1/intakes` 创建 **`kind=tool`** 的收录，并在服务端**尝试**自动解析资料段。
+- **它不是** `fetch profile` 的 `profile_id` 自动推断替代品；抓取社交账号主页（如 YouTube）应直接用：`c456 fetch profile -p social_account -u "<url>"`。
 
 `profile_id` 类型含义：
 
