@@ -49,6 +49,8 @@ npx skills add . --skill c456-cli -y
 4. **严禁编造参数**：只能使用 `c456 <command> --help`（或本仓库源码/文档）明确存在的选项；不确定时先运行 `--help` 再行动。
 5. **严禁重复创建**：若 `intake new` / `playbook new` 输出了 `ID:` 或 `--- JSON ---`（含 `id`），视为已成功创建，后续只能 `show <id>` / `update <id>`，不得再次 `new` 重试（避免重复发布两条）。
 6. **内容一律用文件传入**：创建/更新正文等长文本时，不要在命令行直接写内容（避免引号/换行/转义错误）。必须把内容写到**当前工作目录**的 `.tmp/` 下临时文件，再用 `--body-file` / `--summary-file` 传入。
+7. **自媒体账号默认收录为渠道**：用户要收录 **YouTube / 抖音 / 小红书 / B 站 / 微博** 等**自媒体账号主页或频道**时，**默认使用 `c456 intake new -k channel`**（不要用 `-k tool`），并配合 `-u <主页或频道 URL>`；需要服务端按 URL 自动填资料段时再加 `--auto-resolve-url`。仅做「不落库的 URL 资料预览/抓取」时用 `c456 fetch profile -p social_account -u "<url>"`。
+8. **渠道（及 tool）必须带至少一条「资料」**：`-k channel` 或 `-k tool` 时，服务端要求 **profile_data 里至少有一条资料段**（例如主页 **URL**、**媒体账号** 等对应 facet），常见做法是 `-u <url>` 并加 **`--auto-resolve-url`** 让服务端生成资料段；如需手写 **`--profile-data-json`**，**必须先阅读** [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（含各 `profile_id`、必填字段与最小 JSON 示例）。**不能只写标题/正文而不提供 URL/资料段**，否则会 **422 校验失败**（提示含「至少添加一个资料段或图标」等）。
 
 ## 命令速查
 
@@ -58,7 +60,7 @@ npx skills add . --skill c456-cli -y
 
 **收录 `intake`**
 
-- 新建：`c456 intake new [-k signal|tool|channel] [-u <url>] [--auto-resolve-url] [-t 标题] [--body-file <path>]`
+- 新建：`c456 intake new [-k signal|tool|channel] [-u <url>] [--auto-resolve-url] [--profile-data-json '<json>'] [-t 标题] [--body-file <path>]`（`profile_data` 结构见 [references/intake-profile-data-json.md](references/intake-profile-data-json.md)；长 JSON 建议写入 `.tmp/` 再用 `"$(cat .tmp/profile.json)"` 传入）
 - 查看 / 更新 / 删除 / 列表：`c456 intake show <id>` · `c456 intake update <id> …` · `c456 intake delete <id> [-f]` · `c456 intake list [-k] [-q] [-p 页] [-n 每页]`
 
 `--auto-resolve-url` 说明：
@@ -101,3 +103,11 @@ npx skills add . --skill c456-cli -y
 CLI `--help` 中会用 `type: <type_name>` 标注字段类型；Agent 在生成/写入内容时，必须按下表选择语法与约束：
 
 - `markdown_kramdown` → [references/content-syntax-kramdown.md](references/content-syntax-kramdown.md)（与 `SKILL.md` 同级目录下，随 `npx skills add` 一并安装）
+
+### 收录最佳实践
+
+- **自媒体 / 社交账号**（主页、频道页）：**一律按渠道收录** → `-k channel`；抖音场景补充说明见 [references/douyin-channel-intake.md](references/douyin-channel-intake.md)。
+- **渠道 / 工具**：新建时务必带上 **至少一种结构化资料**（常见：`-u` + `--auto-resolve-url`，或 `--profile-data-json`），否则服务端会因缺少资料段而拒绝保存。
+- **`--profile-data-json`**：键名与校验规则与 Web 端一致，**不要编造字段**；完整说明与示例见 [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（优先自动解析，其次再手写）。
+- **软件 / 产品 / 仓库 / 包页**：一般用 `-k tool`（或用户明确要当「工具资料」收录时）。
+
