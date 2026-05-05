@@ -6,7 +6,7 @@ import { Command as Command7 } from "commander";
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.1.2",
+  version: "0.1.4",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -296,6 +296,8 @@ intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, 
     console.log(`   ID: ${result.data.id}`);
     console.log(`   \u7C7B\u578B\uFF1A${result.data.kind}`);
     console.log(`   \u6807\u9898\uFF1A${result.data.title || "(\u65E0)"}`);
+    console.log("\n--- JSON ---");
+    console.log(JSON.stringify(result.data, null, 2));
   } catch (err) {
     console.error(`\u274C \u521B\u5EFA\u5931\u8D25\uFF1A${err.message}`);
     const kind = String(opts.kind ?? "signal");
@@ -441,7 +443,7 @@ fetchProfile.command("profile").description("\u6293\u53D6\u6307\u5B9A URL \u7684
     process.exit(1);
   }
 });
-fetchProfile.command("detect").description("\u81EA\u52A8\u68C0\u6D4B URL \u7C7B\u578B\u5E76\u6293\u53D6\u8D44\u6599\u5E76\u521B\u5EFA tool \u6536\u5F55").requiredOption("-u, --url <url>", "\u76EE\u6807 URL").action(async (opts, cmd) => {
+fetchProfile.command("detect").description("\u521B\u5EFA tool \u6536\u5F55\u5E76\u5C1D\u8BD5\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF08\u4E0D\u662F profile_id \u81EA\u52A8\u63A8\u65AD\uFF1B\u793E\u4EA4\u8D26\u53F7\u8BF7\u7528 fetch profile -p social_account\uFF09").requiredOption("-u, --url <url>", "\u76EE\u6807 URL").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
