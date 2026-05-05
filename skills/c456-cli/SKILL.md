@@ -70,7 +70,7 @@ npx skills add . --skill c456-cli -y
 
 **资料 `fetch`**
 
-- `c456 fetch profile -u <url> [-p profile_id]`
+- `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）
 - `c456 fetch detect -u <url>`
 
 ## 更完整的说明

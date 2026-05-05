@@ -10,7 +10,7 @@ fetchProfile
   .command("profile")
   .description("抓取指定 URL 的资料段数据")
   .requiredOption("-u, --url <url>", "目标 URL")
-  .option("-p, --profile-id <type>", "资料类型：link_product/package_registry/github_origin/social_account")
+  .requiredOption("-p, --profile-id <type>", "资料类型（必填）：link_product/package_registry/github_origin/social_account")
   .action(async (opts, cmd) => {
     const { apiKey, client } = resolveApi(cmd);
 
@@ -20,10 +20,7 @@ fetchProfile
     }
 
     try {
-      const body = { url: opts.url };
-      if (opts.profileId) {
-        body.profile_id = opts.profileId;
-      }
+      const body = { url: opts.url, profile_id: opts.profileId };
 
       const result = await client.post("/fetches", body);
       const { data, suggested_title } = result.data;
