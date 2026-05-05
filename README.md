@@ -87,7 +87,7 @@ c456 config show
 
 ```bash
 # 按 URL 创建 tool 收录（-B 为站点，-u 为收录目标）
-c456 -B https://c456.example.com intake new -k tool -u "https://github.com/owner/repo"
+c456 -B https://c456.example.com intake new -k tool -u "https://github.com/owner/repo" --auto-resolve-url
 
 # 纯文本信号（可无 URL）
 c456 intake new -k signal -t "标题" -b "正文"
@@ -102,7 +102,6 @@ c456 intake delete <id> --force
 
 ```bash
 c456 fetch profile -u "https://..." -p link_product
-c456 fetch detect -u "https://..."
 ```
 
 ### 搜索（search）

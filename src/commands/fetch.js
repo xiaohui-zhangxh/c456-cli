@@ -46,36 +46,4 @@ fetchProfile
     }
   });
 
-// fetch detect
-fetchProfile
-  .command("detect")
-  .description("创建 tool 收录并尝试自动解析资料（不是 profile_id 自动推断；社交账号请用 fetch profile -p social_account）")
-  .requiredOption("-u, --url <url>", "目标 URL")
-  .action(async (opts, cmd) => {
-    const { apiKey, client } = resolveApi(cmd);
-
-    if (!apiKey) {
-      console.error("错误：未配置 API Key");
-      process.exit(1);
-    }
-
-    try {
-      const result = await client.post("/intakes", {
-        kind: "tool",
-        url: opts.url,
-      });
-
-      console.log("✅ 自动检测并收录成功");
-      console.log(`ID: ${result.data.id}`);
-      console.log(`类型：${result.data.kind}`);
-      if (result.data.profileData) {
-        console.log("\n解析的资料段：");
-        console.log(JSON.stringify(result.data.profileData, null, 2));
-      }
-    } catch (err) {
-      console.error(`❌ 检测失败：${err.message}`);
-      process.exit(1);
-    }
-  });
-
 export default fetchProfile;

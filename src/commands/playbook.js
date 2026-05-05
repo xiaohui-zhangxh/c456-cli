@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { metaPerPage } from "../client.js";
 import { resolveApi } from "../context.js";
+import { readTextFile } from "../textFile.js";
 
 const playbookCmd = new Command()
   .name("playbook")
@@ -11,7 +12,8 @@ playbookCmd
   .command("new")
   .description("创建新打法")
   .requiredOption("-t, --title <title>", "打法标题")
-  .option("-b, --body <text>", "打法正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-b, --body <text>", "打法正文（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "打法正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .option("--ref-intake <id>", "引用收录 ID（可多次指定）")
   .option("--ref-playbook <id>", "引用打法 ID（可多次指定）")
   .action(async (opts, cmd) => {
@@ -39,9 +41,14 @@ playbookCmd
     }
 
     try {
+      if (opts.body && opts.bodyFile) {
+        console.error("错误：--body 与 --body-file 不能同时使用");
+        process.exit(1);
+      }
+      const bodyText = opts.bodyFile ? readTextFile(opts.bodyFile) : (opts.body || "");
       const body = {
         title: opts.title,
-        body: opts.body || "",
+        body: bodyText,
       };
 
       if (referenceTargets.length > 0) {
@@ -105,7 +112,8 @@ playbookCmd
   .description("更新打法")
   .argument("<id>", "打法 ID")
   .option("-t, --title <title>", "新标题")
-  .option("-b, --body <text>", "新正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-b, --body <text>", "新正文（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "新正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .action(async (id, opts, cmd) => {
     const { apiKey, client } = resolveApi(cmd);
 
@@ -117,6 +125,11 @@ playbookCmd
     const body = {};
 
     if (opts.title) body.title = opts.title;
+    if (opts.body && opts.bodyFile) {
+      console.error("错误：--body 与 --body-file 不能同时使用");
+      process.exit(1);
+    }
+    if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
     if (opts.body) body.body = opts.body;
 
     try {

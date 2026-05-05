@@ -48,6 +48,7 @@ npx skills add . --skill c456-cli -y
 3. 勿在日志或回复中回显完整 API Key。
 4. **严禁编造参数**：只能使用 `c456 <command> --help`（或本仓库源码/文档）明确存在的选项；不确定时先运行 `--help` 再行动。
 5. **严禁重复创建**：若 `intake new` / `playbook new` 输出了 `ID:` 或 `--- JSON ---`（含 `id`），视为已成功创建，后续只能 `show <id>` / `update <id>`，不得再次 `new` 重试（避免重复发布两条）。
+6. **内容一律用文件传入**：创建/更新正文等长文本时，不要在命令行直接写内容（避免引号/换行/转义错误）。必须把内容写到**当前工作目录**的 `.tmp/` 下临时文件，再用 `--body-file` / `--summary-file` 传入。
 
 ## 命令速查
 
@@ -57,8 +58,13 @@ npx skills add . --skill c456-cli -y
 
 **收录 `intake`**
 
-- 新建：`c456 intake new [-k signal|tool|channel] [-u <url>] [-t 标题] [-b 正文]`
+- 新建：`c456 intake new [-k signal|tool|channel] [-u <url>] [--auto-resolve-url] [-t 标题] [--body-file <path>]`
 - 查看 / 更新 / 删除 / 列表：`c456 intake show <id>` · `c456 intake update <id> …` · `c456 intake delete <id> [-f]` · `c456 intake list [-k] [-q] [-p 页] [-n 每页]`
+
+`--auto-resolve-url` 说明：
+
+- **默认不解析**：`-u/--url` 只保存为 URL 输入；服务端不会默认生成资料段。
+- **显式开启才解析**：当 `-k tool|channel` 且传入 `--auto-resolve-url` 时，服务端会尝试检测平台并回填 `profile_data`（可能导致校验失败/成功与否不同；会发起网络请求）。
 
 **搜索 `search`**
 
@@ -67,18 +73,12 @@ npx skills add . --skill c456-cli -y
 
 **打法 `playbook`**
 
-- 新建：`c456 playbook new -t "标题" [-b 'Markdown'] [--ref-intake id …] [--ref-playbook id …]`
+- 新建：`c456 playbook new -t "标题" [--body-file <path>] [--ref-intake id …] [--ref-playbook id …]`
 - 另有 `show` / `list` / `update` / `delete`（与 `c456 playbook --help` 一致）
 
 **资料 `fetch`**
 
 - `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）
-- `c456 fetch detect -u <url>`
-
-`fetch detect` 说明：
-
-- 会调用 `POST /api/v1/intakes` 创建 **`kind=tool`** 的收录，并在服务端**尝试**自动解析资料段。
-- **它不是** `fetch profile` 的 `profile_id` 自动推断替代品；抓取社交账号主页（如 YouTube）应直接用：`c456 fetch profile -p social_account -u "<url>"`。
 
 `profile_id` 类型含义：
 
@@ -100,4 +100,4 @@ npx skills add . --skill c456-cli -y
 
 CLI `--help` 中会用 `type: <type_name>` 标注字段类型；Agent 在生成/写入内容时，必须按下表选择语法与约束：
 
-- `markdown_kramdown` → `references/content-syntax-kramdown.md`
+- `markdown_kramdown` → [references/content-syntax-kramdown.md](references/content-syntax-kramdown.md)（与 `SKILL.md` 同级目录下，随 `npx skills add` 一并安装）

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { metaPerPage } from "../client.js";
 import { resolveApi } from "../context.js";
+import { readTextFile } from "../textFile.js";
 
 const walkthroughCmd = new Command()
   .name("walkthrough")
@@ -39,8 +40,10 @@ walkthroughCmd
   .command("new")
   .description("创建新讲解")
   .requiredOption("-t, --title <title>", "标题")
-  .option("-s, --summary <text>", "摘要")
-  .option("-b, --body <text>", "正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-s, --summary <text>", "摘要（不推荐直接传；请用 --summary-file）")
+  .option("--summary-file <path>", "摘要文件路径（建议写到当前目录 .tmp/）")
+  .option("-b, --body <text>", "正文（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .option("--source-kind <kind>", "来源：upload/external_url（默认 upload）", "upload")
   .option("--external-url <url>", "asciinema.org 链接（source-kind=external_url 时必填）")
   .option("--cast-file <path>", ".cast 文件路径（source-kind=upload 时必填）")
@@ -52,10 +55,19 @@ walkthroughCmd
     const sourceKind = ensureSourceKind(opts.sourceKind);
     const posterAt = opts.posterAt !== undefined ? Number.parseInt(String(opts.posterAt), 10) : undefined;
 
+    if (opts.body && opts.bodyFile) {
+      console.error("错误：--body 与 --body-file 不能同时使用");
+      process.exit(1);
+    }
+    if (opts.summary && opts.summaryFile) {
+      console.error("错误：--summary 与 --summary-file 不能同时使用");
+      process.exit(1);
+    }
+
     const w = {
       title: opts.title,
-      summary: opts.summary || "",
-      body: opts.body || "",
+      summary: opts.summaryFile ? readTextFile(opts.summaryFile) : (opts.summary || ""),
+      body: opts.bodyFile ? readTextFile(opts.bodyFile) : (opts.body || ""),
       source_kind: sourceKind,
       external_url: opts.externalUrl || "",
       poster_preview_at_seconds: Number.isFinite(posterAt) ? posterAt : undefined,
@@ -152,8 +164,10 @@ walkthroughCmd
   .description("更新讲解")
   .argument("<id>", "讲解 ID")
   .option("-t, --title <title>", "新标题")
-  .option("-s, --summary <text>", "新摘要")
-  .option("-b, --body <text>", "新正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-s, --summary <text>", "新摘要（不推荐直接传；请用 --summary-file）")
+  .option("--summary-file <path>", "新摘要文件路径（建议写到当前目录 .tmp/）")
+  .option("-b, --body <text>", "新正文（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "新正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .option("--publication-status <status>", "发布状态：pending_review/private")
   .option("--source-kind <kind>", "来源：upload/external_url")
   .option("--external-url <url>", "asciinema.org 链接（source-kind=external_url）")
@@ -164,10 +178,19 @@ walkthroughCmd
     requireApiKey(apiKey);
 
     const posterAt = opts.posterAt !== undefined ? Number.parseInt(String(opts.posterAt), 10) : undefined;
+    if (opts.body && opts.bodyFile) {
+      console.error("错误：--body 与 --body-file 不能同时使用");
+      process.exit(1);
+    }
+    if (opts.summary && opts.summaryFile) {
+      console.error("错误：--summary 与 --summary-file 不能同时使用");
+      process.exit(1);
+    }
+
     const w = buildWalkthroughFields({
       title: opts.title,
-      summary: opts.summary,
-      body: opts.body,
+      summary: opts.summaryFile ? readTextFile(opts.summaryFile) : opts.summary,
+      body: opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body,
       sourceKind: opts.sourceKind ? ensureSourceKind(opts.sourceKind) : undefined,
       externalUrl: opts.externalUrl,
       posterAt: Number.isFinite(posterAt) ? posterAt : undefined,

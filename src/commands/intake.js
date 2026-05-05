@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { metaPerPage, ApiError } from "../client.js";
 import { resolveApi } from "../context.js";
+import { readTextFile } from "../textFile.js";
 
 const intake = new Command()
   .name("intake")
@@ -10,11 +11,13 @@ const intake = new Command()
 intake
   .command("new")
   .description("创建新收录")
-  .option("-u, --url <url>", "目标 URL（tool/channel 时可选，用于自动解析资料）")
+  .option("-u, --url <url>", "目标 URL（tool/channel 时可选；配合 --auto-resolve-url 可自动解析资料）")
   .option("-k, --kind <type>", "类型：signal/tool/channel（默认 signal）", "signal")
   .option("-t, --title <title>", "标题（tool/channel 必填）")
-  .option("-b, --body <text>", "正文/描述（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-b, --body <text>", "正文/描述（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .option("--profile-data-json <json>", "资料段 JSON（tool/channel）")
+  .option("--auto-resolve-url", "自动解析 URL 并填充资料段 profile_data（仅 tool/channel；会发起网络请求）")
   .action(async (opts, cmd) => {
     const { apiKey, baseUrl, client } = resolveApi(cmd);
 
@@ -25,10 +28,15 @@ intake
     }
 
     try {
+      if (opts.body && opts.bodyFile) {
+        console.error("错误：--body 与 --body-file 不能同时使用");
+        process.exit(1);
+      }
+      const bodyText = opts.bodyFile ? readTextFile(opts.bodyFile) : (opts.body || "");
       const body = {
         kind: opts.kind,
         title: opts.title || "",
-        body: opts.body || "",
+        body: bodyText,
       };
 
       if (opts.url) {
@@ -37,6 +45,19 @@ intake
 
       if (opts.profileDataJson) {
         body.profile_data_json = opts.profileDataJson;
+      }
+      
+      const kind = String(opts.kind ?? "signal");
+      if (opts.autoResolveUrl) {
+        if (!opts.url) {
+          console.error("错误：使用 --auto-resolve-url 时必须同时提供 -u/--url");
+          process.exit(1);
+        }
+        if (kind !== "tool" && kind !== "channel") {
+          console.error("错误：--auto-resolve-url 仅适用于 -k tool 或 -k channel");
+          process.exit(1);
+        }
+        body.auto_resolve_url = true;
       }
 
       const result = await client.post("/intakes", body);
@@ -67,10 +88,10 @@ intake
         err.status === 422;
       if (urlHint) {
         console.error("");
-        console.error("提示：当前为 signal（默认）。`-u` 仅在 `-k tool` 或 `-k channel` 时会用于自动解析资料。");
+        console.error("提示：当前为 signal（默认）。若要解析 URL 的资料段，请使用 `-k tool`/`-k channel` 并显式开启 `--auto-resolve-url`。");
         console.error("  示例：");
-        console.error('    c456 -B <站点> intake new -k channel -u "<频道或主页 URL>"');
-        console.error('    c456 -B <站点> intake new -k tool -u "<工具 / 仓库 URL>"');
+        console.error('    c456 -B <站点> intake new -k channel -u "<频道或主页 URL>" --auto-resolve-url');
+        console.error('    c456 -B <站点> intake new -k tool -u "<工具 / 仓库 URL>" --auto-resolve-url');
       }
       process.exit(1);
     }
@@ -112,7 +133,8 @@ intake
   .description("更新收录")
   .argument("<id>", "收录 ID")
   .option("-t, --title <title>", "新标题")
-  .option("-b, --body <text>", "新正文（type: markdown_kramdown；语法见 references/content-syntax-kramdown.md）")
+  .option("-b, --body <text>", "新正文（不推荐直接传；请用 --body-file）")
+  .option("--body-file <path>", "新正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
   .option("--favorited", "标记为收藏")
   .option("--unfavorited", "取消收藏")
   .action(async (id, opts, cmd) => {
@@ -126,6 +148,11 @@ intake
     const body = {};
 
     if (opts.title) body.title = opts.title;
+    if (opts.body && opts.bodyFile) {
+      console.error("错误：--body 与 --body-file 不能同时使用");
+      process.exit(1);
+    }
+    if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
     if (opts.body) body.body = opts.body;
     if (opts.favorited) body.favorited = true;
     if (opts.unfavorited) body.favorited = false;

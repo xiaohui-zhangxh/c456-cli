@@ -270,9 +270,22 @@ function resolveApi(cmd) {
   return { apiKey, baseUrl, client: new ApiClient(baseUrl, apiKey) };
 }
 
+// src/textFile.js
+import { readFileSync as readFileSync2 } from "node:fs";
+function readTextFile(path) {
+  try {
+    return readFileSync2(path, "utf-8");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`\u9519\u8BEF\uFF1A\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${path}`);
+    console.error(msg);
+    process.exit(1);
+  }
+}
+
 // src/commands/intake.js
 var intake = new Command().name("intake").description("\u6536\u5F55\u7BA1\u7406 - \u521B\u5EFA\u3001\u66F4\u65B0\u3001\u5220\u9664\u5DE5\u5177/\u6E20\u9053/\u4FE1\u53F7");
-intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, --url <url>", "\u76EE\u6807 URL\uFF08tool/channel \u65F6\u53EF\u9009\uFF0C\u7528\u4E8E\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\uFF1Asignal/tool/channel\uFF08\u9ED8\u8BA4 signal\uFF09", "signal").option("-t, --title <title>", "\u6807\u9898\uFF08tool/channel \u5FC5\u586B\uFF09").option("-b, --body <text>", "\u6B63\u6587/\u63CF\u8FF0\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--profile-data-json <json>", "\u8D44\u6599\u6BB5 JSON\uFF08tool/channel\uFF09").action(async (opts, cmd) => {
+intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, --url <url>", "\u76EE\u6807 URL\uFF08tool/channel \u65F6\u53EF\u9009\uFF1B\u914D\u5408 --auto-resolve-url \u53EF\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF09").option("-k, --kind <type>", "\u7C7B\u578B\uFF1Asignal/tool/channel\uFF08\u9ED8\u8BA4 signal\uFF09", "signal").option("-t, --title <title>", "\u6807\u9898\uFF08tool/channel \u5FC5\u586B\uFF09").option("-b, --body <text>", "\u6B63\u6587/\u63CF\u8FF0\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--profile-data-json <json>", "\u8D44\u6599\u6BB5 JSON\uFF08tool/channel\uFF09").option("--auto-resolve-url", "\u81EA\u52A8\u89E3\u6790 URL \u5E76\u586B\u5145\u8D44\u6599\u6BB5 profile_data\uFF08\u4EC5 tool/channel\uFF1B\u4F1A\u53D1\u8D77\u7F51\u7EDC\u8BF7\u6C42\uFF09").action(async (opts, cmd) => {
   const { apiKey, baseUrl, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -280,16 +293,33 @@ intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, 
     process.exit(1);
   }
   try {
+    if (opts.body && opts.bodyFile) {
+      console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+      process.exit(1);
+    }
+    const bodyText = opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body || "";
     const body = {
       kind: opts.kind,
       title: opts.title || "",
-      body: opts.body || ""
+      body: bodyText
     };
     if (opts.url) {
       body.url = opts.url;
     }
     if (opts.profileDataJson) {
       body.profile_data_json = opts.profileDataJson;
+    }
+    const kind = String(opts.kind ?? "signal");
+    if (opts.autoResolveUrl) {
+      if (!opts.url) {
+        console.error("\u9519\u8BEF\uFF1A\u4F7F\u7528 --auto-resolve-url \u65F6\u5FC5\u987B\u540C\u65F6\u63D0\u4F9B -u/--url");
+        process.exit(1);
+      }
+      if (kind !== "tool" && kind !== "channel") {
+        console.error("\u9519\u8BEF\uFF1A--auto-resolve-url \u4EC5\u9002\u7528\u4E8E -k tool \u6216 -k channel");
+        process.exit(1);
+      }
+      body.auto_resolve_url = true;
     }
     const result = await client.post("/intakes", body);
     console.log("\u2705 \u6536\u5F55\u521B\u5EFA\u6210\u529F");
@@ -314,10 +344,10 @@ intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, 
     const urlHint = Boolean(opts.url) && kind === "signal" && err instanceof ApiError && err.status === 422;
     if (urlHint) {
       console.error("");
-      console.error("\u63D0\u793A\uFF1A\u5F53\u524D\u4E3A signal\uFF08\u9ED8\u8BA4\uFF09\u3002`-u` \u4EC5\u5728 `-k tool` \u6216 `-k channel` \u65F6\u4F1A\u7528\u4E8E\u81EA\u52A8\u89E3\u6790\u8D44\u6599\u3002");
+      console.error("\u63D0\u793A\uFF1A\u5F53\u524D\u4E3A signal\uFF08\u9ED8\u8BA4\uFF09\u3002\u82E5\u8981\u89E3\u6790 URL \u7684\u8D44\u6599\u6BB5\uFF0C\u8BF7\u4F7F\u7528 `-k tool`/`-k channel` \u5E76\u663E\u5F0F\u5F00\u542F `--auto-resolve-url`\u3002");
       console.error("  \u793A\u4F8B\uFF1A");
-      console.error('    c456 -B <\u7AD9\u70B9> intake new -k channel -u "<\u9891\u9053\u6216\u4E3B\u9875 URL>"');
-      console.error('    c456 -B <\u7AD9\u70B9> intake new -k tool -u "<\u5DE5\u5177 / \u4ED3\u5E93 URL>"');
+      console.error('    c456 -B <\u7AD9\u70B9> intake new -k channel -u "<\u9891\u9053\u6216\u4E3B\u9875 URL>" --auto-resolve-url');
+      console.error('    c456 -B <\u7AD9\u70B9> intake new -k tool -u "<\u5DE5\u5177 / \u4ED3\u5E93 URL>" --auto-resolve-url');
     }
     process.exit(1);
   }
@@ -343,7 +373,7 @@ intake.command("show").description("\u67E5\u770B\u6536\u5F55\u8BE6\u60C5").argum
     process.exit(1);
   }
 });
-intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
+intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u65B0\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -351,6 +381,11 @@ intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>"
   }
   const body = {};
   if (opts.title) body.title = opts.title;
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
   if (opts.body) body.body = opts.body;
   if (opts.favorited) body.favorited = true;
   if (opts.unfavorited) body.favorited = false;
@@ -453,29 +488,6 @@ fetchProfile.command("profile").description("\u6293\u53D6\u6307\u5B9A URL \u7684
     process.exit(1);
   }
 });
-fetchProfile.command("detect").description("\u521B\u5EFA tool \u6536\u5F55\u5E76\u5C1D\u8BD5\u81EA\u52A8\u89E3\u6790\u8D44\u6599\uFF08\u4E0D\u662F profile_id \u81EA\u52A8\u63A8\u65AD\uFF1B\u793E\u4EA4\u8D26\u53F7\u8BF7\u7528 fetch profile -p social_account\uFF09").requiredOption("-u, --url <url>", "\u76EE\u6807 URL").action(async (opts, cmd) => {
-  const { apiKey, client } = resolveApi(cmd);
-  if (!apiKey) {
-    console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
-    process.exit(1);
-  }
-  try {
-    const result = await client.post("/intakes", {
-      kind: "tool",
-      url: opts.url
-    });
-    console.log("\u2705 \u81EA\u52A8\u68C0\u6D4B\u5E76\u6536\u5F55\u6210\u529F");
-    console.log(`ID: ${result.data.id}`);
-    console.log(`\u7C7B\u578B\uFF1A${result.data.kind}`);
-    if (result.data.profileData) {
-      console.log("\n\u89E3\u6790\u7684\u8D44\u6599\u6BB5\uFF1A");
-      console.log(JSON.stringify(result.data.profileData, null, 2));
-    }
-  } catch (err) {
-    console.error(`\u274C \u68C0\u6D4B\u5931\u8D25\uFF1A${err.message}`);
-    process.exit(1);
-  }
-});
 var fetch_default = fetchProfile;
 
 // src/commands/search.js
@@ -551,7 +563,7 @@ var search_default = searchCmd;
 // src/commands/playbook.js
 import { Command as Command4 } from "commander";
 var playbookCmd = new Command4().name("playbook").description("\u6253\u6CD5\u7BA1\u7406 - \u521B\u5EFA\u3001\u66F4\u65B0\u3001\u5220\u9664\u6253\u6CD5");
-playbookCmd.command("new").description("\u521B\u5EFA\u65B0\u6253\u6CD5").requiredOption("-t, --title <title>", "\u6253\u6CD5\u6807\u9898").option("-b, --body <text>", "\u6253\u6CD5\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--ref-intake <id>", "\u5F15\u7528\u6536\u5F55 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").option("--ref-playbook <id>", "\u5F15\u7528\u6253\u6CD5 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").action(async (opts, cmd) => {
+playbookCmd.command("new").description("\u521B\u5EFA\u65B0\u6253\u6CD5").requiredOption("-t, --title <title>", "\u6253\u6CD5\u6807\u9898").option("-b, --body <text>", "\u6253\u6CD5\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u6253\u6CD5\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--ref-intake <id>", "\u5F15\u7528\u6536\u5F55 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").option("--ref-playbook <id>", "\u5F15\u7528\u6253\u6CD5 ID\uFF08\u53EF\u591A\u6B21\u6307\u5B9A\uFF09").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -571,9 +583,14 @@ playbookCmd.command("new").description("\u521B\u5EFA\u65B0\u6253\u6CD5").require
     });
   }
   try {
+    if (opts.body && opts.bodyFile) {
+      console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+      process.exit(1);
+    }
+    const bodyText = opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body || "";
     const body = {
       title: opts.title,
-      body: opts.body || ""
+      body: bodyText
     };
     if (referenceTargets.length > 0) {
       body.reference_targets = referenceTargets;
@@ -617,7 +634,7 @@ ${data.body || "(\u65E0)"}`);
     process.exit(1);
   }
 });
-playbookCmd.command("update").description("\u66F4\u65B0\u6253\u6CD5").argument("<id>", "\u6253\u6CD5 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").action(async (id, opts, cmd) => {
+playbookCmd.command("update").description("\u66F4\u65B0\u6253\u6CD5").argument("<id>", "\u6253\u6CD5 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u65B0\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -625,6 +642,11 @@ playbookCmd.command("update").description("\u66F4\u65B0\u6253\u6CD5").argument("
   }
   const body = {};
   if (opts.title) body.title = opts.title;
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
   if (opts.body) body.body = opts.body;
   try {
     await client.patch(`/playbooks/${id}`, body);
@@ -720,15 +742,23 @@ function buildWalkthroughFields(opts) {
   if (opts.publicationStatus !== void 0) w.publication_status = opts.publicationStatus;
   return w;
 }
-walkthroughCmd.command("new").description("\u521B\u5EFA\u65B0\u8BB2\u89E3").requiredOption("-t, --title <title>", "\u6807\u9898").option("-s, --summary <text>", "\u6458\u8981").option("-b, --body <text>", "\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url\uFF08\u9ED8\u8BA4 upload\uFF09", "upload").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url \u65F6\u5FC5\u586B\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08source-kind=upload \u65F6\u5FC5\u586B\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (opts, cmd) => {
+walkthroughCmd.command("new").description("\u521B\u5EFA\u65B0\u8BB2\u89E3").requiredOption("-t, --title <title>", "\u6807\u9898").option("-s, --summary <text>", "\u6458\u8981\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --summary-file\uFF09").option("--summary-file <path>", "\u6458\u8981\u6587\u4EF6\u8DEF\u5F84\uFF08\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("-b, --body <text>", "\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url\uFF08\u9ED8\u8BA4 upload\uFF09", "upload").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url \u65F6\u5FC5\u586B\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08source-kind=upload \u65F6\u5FC5\u586B\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   requireApiKey(apiKey);
   const sourceKind = ensureSourceKind(opts.sourceKind);
   const posterAt = opts.posterAt !== void 0 ? Number.parseInt(String(opts.posterAt), 10) : void 0;
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  if (opts.summary && opts.summaryFile) {
+    console.error("\u9519\u8BEF\uFF1A--summary \u4E0E --summary-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
   const w = {
     title: opts.title,
-    summary: opts.summary || "",
-    body: opts.body || "",
+    summary: opts.summaryFile ? readTextFile(opts.summaryFile) : opts.summary || "",
+    body: opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body || "",
     source_kind: sourceKind,
     external_url: opts.externalUrl || "",
     poster_preview_at_seconds: Number.isFinite(posterAt) ? posterAt : void 0
@@ -799,14 +829,22 @@ ${w.body || "(\u65E0)"}`);
   console.log(`\u6765\u6E90\uFF1A${w.sourceKind}`);
   if (w.src) console.log(`\u5A92\u4F53\uFF1A${w.src}`);
 });
-walkthroughCmd.command("update").description("\u66F4\u65B0\u8BB2\u89E3").argument("<id>", "\u8BB2\u89E3 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-s, --summary <text>", "\u65B0\u6458\u8981").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08type: markdown_kramdown\uFF1B\u8BED\u6CD5\u89C1 references/content-syntax-kramdown.md\uFF09").option("--publication-status <status>", "\u53D1\u5E03\u72B6\u6001\uFF1Apending_review/private").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08\u4E0A\u4F20\u66FF\u6362\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (id, opts, cmd) => {
+walkthroughCmd.command("update").description("\u66F4\u65B0\u8BB2\u89E3").argument("<id>", "\u8BB2\u89E3 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-s, --summary <text>", "\u65B0\u6458\u8981\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --summary-file\uFF09").option("--summary-file <path>", "\u65B0\u6458\u8981\u6587\u4EF6\u8DEF\u5F84\uFF08\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u65B0\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--publication-status <status>", "\u53D1\u5E03\u72B6\u6001\uFF1Apending_review/private").option("--source-kind <kind>", "\u6765\u6E90\uFF1Aupload/external_url").option("--external-url <url>", "asciinema.org \u94FE\u63A5\uFF08source-kind=external_url\uFF09").option("--cast-file <path>", ".cast \u6587\u4EF6\u8DEF\u5F84\uFF08\u4E0A\u4F20\u66FF\u6362\uFF09").option("--poster-at <seconds>", "\u5C01\u9762\u9884\u89C8\u79D2\u6570\uFF08>=0 \u7684\u6574\u6570\uFF09").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   requireApiKey(apiKey);
   const posterAt = opts.posterAt !== void 0 ? Number.parseInt(String(opts.posterAt), 10) : void 0;
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  if (opts.summary && opts.summaryFile) {
+    console.error("\u9519\u8BEF\uFF1A--summary \u4E0E --summary-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
   const w = buildWalkthroughFields({
     title: opts.title,
-    summary: opts.summary,
-    body: opts.body,
+    summary: opts.summaryFile ? readTextFile(opts.summaryFile) : opts.summary,
+    body: opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body,
     sourceKind: opts.sourceKind ? ensureSourceKind(opts.sourceKind) : void 0,
     externalUrl: opts.externalUrl,
     posterAt: Number.isFinite(posterAt) ? posterAt : void 0,
