@@ -6,7 +6,7 @@ import { Command as Command7 } from "commander";
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.1.4",
+  version: "0.1.5",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -297,7 +297,17 @@ intake.command("new").description("\u521B\u5EFA\u65B0\u6536\u5F55").option("-u, 
     console.log(`   \u7C7B\u578B\uFF1A${result.data.kind}`);
     console.log(`   \u6807\u9898\uFF1A${result.data.title || "(\u65E0)"}`);
     console.log("\n--- JSON ---");
-    console.log(JSON.stringify(result.data, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          id: result.data.id,
+          kind: result.data.kind,
+          title: result.data.title || ""
+        },
+        null,
+        2
+      )
+    );
   } catch (err) {
     console.error(`\u274C \u521B\u5EFA\u5931\u8D25\uFF1A${err.message}`);
     const kind = String(opts.kind ?? "signal");

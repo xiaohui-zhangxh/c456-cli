@@ -46,7 +46,17 @@ intake
       console.log(`   类型：${result.data.kind}`);
       console.log(`   标题：${result.data.title || "(无)"}`);
       console.log("\n--- JSON ---");
-      console.log(JSON.stringify(result.data, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            id: result.data.id,
+            kind: result.data.kind,
+            title: result.data.title || "",
+          },
+          null,
+          2
+        )
+      );
     } catch (err) {
       console.error(`❌ 创建失败：${err.message}`);
       const kind = String(opts.kind ?? "signal");
