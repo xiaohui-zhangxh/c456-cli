@@ -1,6 +1,6 @@
 {
   "name": "c456-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "C456 CLI - 内容录入与整理工具",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "docs",
+    "skills",
     "README.md"
   ],
   "scripts": {

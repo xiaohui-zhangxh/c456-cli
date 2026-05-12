@@ -12,6 +12,7 @@ import fetchProfile from "./commands/fetch.js";
 import searchCmd from "./commands/search.js";
 import playbookCmd from "./commands/playbook.js";
 import walkthroughCmd from "./commands/walkthrough.js";
+import assetCmd from "./commands/asset.js";
 import configCmd from "./commands/config.js";
 import { getHelpBanner } from "./banner.js";
 
@@ -22,7 +23,28 @@ program
   .description("C456 CLI - 快速内容录入与整理工具")
   .version(pkg.version);
 
-program.addHelpText("before", () => getHelpBanner());
+program.addHelpText("before", () => {
+  const banner = getHelpBanner();
+  const versionLine = `c456-cli ${pkg.version}`;
+  if (!banner) {
+    return `\n${versionLine}\n`;
+  }
+  return `${banner}\n${versionLine}\n`;
+});
+
+// Commander 在「有子命令但未给出子命令」时以 help({ error: true }) 展示帮助并 exit 1；
+// 无参裸调 c456 视为成功（exit 0），同时保留其它错误的退出码。
+program.exitOverride((err) => {
+  if (err.code === "commander.executeSubCommandAsync") {
+    process.exit(err.exitCode ?? 1);
+    return;
+  }
+  if (err.code === "commander.help" && err.exitCode === 1) {
+    process.exit(0);
+    return;
+  }
+  process.exit(err.exitCode ?? 1);
+});
 
 // 全局选项（子命令仍可用 -u 表示「目标 URL」等，故根级用 -B / --base-url 表示站点根地址）
 program.option(
@@ -38,6 +60,7 @@ program.addCommand(fetchProfile);
 program.addCommand(searchCmd);
 program.addCommand(playbookCmd);
 program.addCommand(walkthroughCmd);
+program.addCommand(assetCmd);
 program.addCommand(intakeCmd); // AI 入口：自动识别类型并路由（与 5 大类并存）
 program.addCommand(configCmd);
 

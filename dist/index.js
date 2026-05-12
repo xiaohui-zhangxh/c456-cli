@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 // src/index.js
-import { Command as Command9 } from "commander";
+import { Command as Command10 } from "commander";
 
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.2.0",
+  version: "0.3.0",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -14,6 +14,8 @@ var package_default = {
   },
   files: [
     "dist",
+    "docs",
+    "skills",
     "README.md"
   ],
   scripts: {
@@ -338,7 +340,7 @@ intake.command("show").description("\u67E5\u770B\u6536\u5F55\u8BE6\u60C5").argum
     process.exit(1);
   }
 });
-intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u65B0\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
+intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>", "\u6536\u5F55 ID").option("-t, --title <title>", "\u65B0\u6807\u9898").option("-b, --body <text>", "\u65B0\u6B63\u6587\uFF08\u4E0D\u63A8\u8350\u76F4\u63A5\u4F20\uFF1B\u8BF7\u7528 --body-file\uFF09").option("--body-file <path>", "\u65B0\u6B63\u6587\u6587\u4EF6\u8DEF\u5F84\uFF08type: markdown_kramdown\uFF1B\u5EFA\u8BAE\u5199\u5230\u5F53\u524D\u76EE\u5F55 .tmp/\uFF09").option("--profile-data-json <json>", "tool/channel\uFF1Aprofile_data \u7247\u6BB5\uFF08JSON \u5B57\u7B26\u4E32\uFF0C\u4E0E API \u5408\u5E76\u89C4\u5219\u4E00\u81F4\uFF09").option("--profile-data-json-file <path>", "\u4ECE\u6587\u4EF6\u8BFB\u53D6 profile_data \u7247\u6BB5 JSON\uFF08\u4E0E --profile-data-json \u4E92\u65A5\uFF09").option("--favorited", "\u6807\u8BB0\u4E3A\u6536\u85CF").option("--unfavorited", "\u53D6\u6D88\u6536\u85CF").action(async (id, opts, cmd) => {
   const { apiKey, client } = resolveApi(cmd);
   if (!apiKey) {
     console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
@@ -352,8 +354,33 @@ intake.command("update").description("\u66F4\u65B0\u6536\u5F55").argument("<id>"
   }
   if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
   if (opts.body) body.body = opts.body;
+  if (opts.profileDataJson && opts.profileDataJsonFile) {
+    console.error("\u9519\u8BEF\uFF1A--profile-data-json \u4E0E --profile-data-json-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  if (opts.profileDataJsonFile) {
+    try {
+      body.profile_data = JSON.parse(readTextFile(opts.profileDataJsonFile));
+    } catch (e) {
+      console.error(`\u9519\u8BEF\uFF1A\u65E0\u6CD5\u89E3\u6790 profile_data JSON\uFF08${e.message}\uFF09`);
+      process.exit(1);
+    }
+  } else if (opts.profileDataJson) {
+    try {
+      body.profile_data = JSON.parse(opts.profileDataJson);
+    } catch (e) {
+      console.error(`\u9519\u8BEF\uFF1A\u65E0\u6CD5\u89E3\u6790 --profile-data-json\uFF08${e.message}\uFF09`);
+      process.exit(1);
+    }
+  }
   if (opts.favorited) body.favorited = true;
   if (opts.unfavorited) body.favorited = false;
+  if (Object.keys(body).length === 0) {
+    console.error(
+      "\u9519\u8BEF\uFF1A\u8BF7\u81F3\u5C11\u63D0\u4F9B --title\u3001--body/--body-file\u3001--profile-data-json/--profile-data-json-file \u6216 --favorited/--unfavorited"
+    );
+    process.exit(1);
+  }
   try {
     await client.patch(`/intakes/${id}`, body);
     console.log("\u2705 \u6536\u5F55\u66F4\u65B0\u6210\u529F");
@@ -1043,9 +1070,131 @@ walkthroughCmd.command("delete").description("\u5220\u9664\u8BB2\u89E3").argumen
 });
 var walkthrough_default = walkthroughCmd;
 
-// src/commands/config.js
+// src/commands/asset.js
+import { createHash } from "node:crypto";
+import { extname } from "node:path";
 import { Command as Command8 } from "commander";
-var configCmd = new Command8().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740");
+
+// src/mediaLibraryFingerprint.js
+function normalizeForFingerprint(markdown) {
+  const OMIT = "__C456_ASSET_URL_OMITTED__";
+  const dquote = /!\[([^\]]*)\]\(\s*(https?:\/\/[^\s)]+)\s+"(c456:asset\/(\d+))"\s*\)/g;
+  const squote = /!\[([^\]]*)\]\(\s*(https?:\/\/[^\s)]+)\s+'(c456:asset\/(\d+))'\s*\)/g;
+  let s = String(markdown ?? "");
+  s = s.replace(dquote, (_m, alt, _url, title) => `![${alt}](${OMIT} "${title}")`);
+  s = s.replace(squote, (_m, alt, _url, title) => `![${alt}](${OMIT} '${title}')`);
+  return s;
+}
+
+// src/commands/asset.js
+var extToMime = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml"
+};
+function guessImageContentType(filePath) {
+  const ext = extname(filePath).toLowerCase();
+  return extToMime[ext] || "application/octet-stream";
+}
+var assetCmd = new Command8().name("asset").description("\u7D20\u6750\u5E93\uFF08\u56FE\u7247\uFF09\u2014 \u4E0A\u4F20\u3001\u5217\u8868\u3001\u7EED\u671F\u6B63\u6587\u4E2D\u7684\u9884\u89C8\u94FE\u63A5");
+function requireApiKey3(apiKey) {
+  if (!apiKey) {
+    console.error("\u9519\u8BEF\uFF1A\u672A\u914D\u7F6E API Key");
+    process.exit(1);
+  }
+}
+function sha256HexUtf8(markdown) {
+  return createHash("sha256").update(normalizeForFingerprint(markdown), "utf8").digest("hex");
+}
+assetCmd.command("upload").description("\u4E0A\u4F20\u56FE\u7247\u5230\u7D20\u6750\u5E93").requiredOption("-f, --file <path>", "\u672C\u5730\u56FE\u7247\u8DEF\u5F84").action(async (opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  const result = await client.postMultipart(
+    "/assets",
+    {},
+    {
+      fieldName: "file",
+      filePath: opts.file,
+      filename: void 0,
+      contentType: guessImageContentType(opts.file)
+    }
+  );
+  const d = result.data;
+  console.log("\u2705 \u4E0A\u4F20\u6210\u529F");
+  console.log(`   id: ${d.id}`);
+  console.log(`   previewUrl: ${d.previewUrl}`);
+  console.log("");
+  console.log(d.markdownSnippet);
+});
+assetCmd.command("list").description("\u5217\u51FA\u7D20\u6750").option("-p, --page <num>", "\u9875\u7801", "1").option("-n, --per-page <num>", "\u6BCF\u9875\u6761\u6570", "50").action(async (opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  const page = Number.parseInt(String(opts.page), 10) || 1;
+  const perPage = Number.parseInt(String(opts.perPage), 10) || 50;
+  const { data, meta } = await client.get("/assets", { page, per_page: perPage });
+  const n = metaPerPage(meta);
+  console.log(`\u5171 ${meta?.total ?? "?"} \u6761 \xB7 \u6BCF\u9875 ${n} \xB7 \u7B2C ${meta?.page ?? page} \u9875`);
+  for (const row of data || []) {
+    console.log(`- #${row.id} ${row.filename ?? ""} ${row.markdownSnippet ?? ""}`);
+  }
+});
+assetCmd.command("update").description("\u66F4\u65B0\u7D20\u6750\u5728\u5E93\u4E2D\u7684\u5C55\u793A\u6587\u4EF6\u540D\uFF08\u4E0D\u66FF\u6362\u56FE\u7247\u5185\u5BB9\uFF1BJSON PATCH /assets/:id\uFF09").argument("<id>", "\u7D20\u6750 ID").requiredOption("--filename <name>", "\u65B0\u7684\u5C55\u793A\u6587\u4EF6\u540D\uFF0C\u5982 logo.webp").action(async (id, opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  const { data } = await client.patch(`/assets/${id}`, { filename: opts.filename });
+  console.log("\u2705 \u5DF2\u66F4\u65B0");
+  console.log(`   id: ${data.id}`);
+  console.log(`   filename: ${data.filename ?? ""}`);
+  console.log("");
+  console.log(data.markdownSnippet ?? "");
+});
+assetCmd.command("show").description("\u67E5\u770B\u5355\u6761\u7D20\u6750").argument("<id>", "\u7D20\u6750 ID").action(async (id, _opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  const { data } = await client.get(`/assets/${id}`);
+  console.log(JSON.stringify(data, null, 2));
+});
+assetCmd.command("delete").description("\u5220\u9664\u7D20\u6750\uFF08\u82E5\u4ECD\u88AB\u6B63\u6587\u5F15\u7528\u4F1A\u5931\u8D25\uFF09").argument("<id>", "\u7D20\u6750 ID").action(async (id, _opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  await client.delete(`/assets/${id}`);
+  console.log("\u2705 \u5DF2\u5220\u9664");
+});
+assetCmd.command("refresh-markdown").description("\u7EED\u671F\u6B63\u6587\u4E2D\u7684\u7D20\u6750\u9884\u89C8 URL\uFF08\u8BFB\u5165 Markdown\uFF0C\u8F93\u51FA\u66FF\u6362\u540E\u7684\u5168\u6587\u5230 stdout\uFF09").option("-b, --body <text>", "Markdown \u5B57\u7B26\u4E32").option("--body-file <path>", "Markdown \u6587\u4EF6\u8DEF\u5F84").action(async (opts, cmd) => {
+  const { apiKey, client } = resolveApi(cmd);
+  requireApiKey3(apiKey);
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  const markdown = opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body ?? "";
+  if (!markdown) {
+    console.error("\u9519\u8BEF\uFF1A\u8BF7\u63D0\u4F9B --body \u6216 --body-file");
+    process.exit(1);
+  }
+  const { data } = await client.post("/assets/refresh_markdown", { markdown });
+  process.stdout.write(String(data.markdown ?? ""));
+});
+assetCmd.command("fingerprint").description("\u5BF9\u6B63\u6587\u505A\u4E0E\u670D\u52A1\u5668\u4E00\u81F4\u7684\u89C4\u8303\u5316\u540E\u8F93\u51FA sha256 hex\uFF08\u4E0D\u8C03\u7528\u7F51\u7EDC\uFF09").option("-b, --body <text>", "Markdown \u5B57\u7B26\u4E32").option("--body-file <path>", "Markdown \u6587\u4EF6\u8DEF\u5F84").action(async (opts) => {
+  if (opts.body && opts.bodyFile) {
+    console.error("\u9519\u8BEF\uFF1A--body \u4E0E --body-file \u4E0D\u80FD\u540C\u65F6\u4F7F\u7528");
+    process.exit(1);
+  }
+  const markdown = opts.bodyFile ? readTextFile(opts.bodyFile) : opts.body ?? "";
+  if (!markdown) {
+    console.error("\u9519\u8BEF\uFF1A\u8BF7\u63D0\u4F9B --body \u6216 --body-file");
+    process.exit(1);
+  }
+  console.log(sha256HexUtf8(markdown));
+});
+var asset_default = assetCmd;
+
+// src/commands/config.js
+import { Command as Command9 } from "commander";
+var configCmd = new Command9().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740");
 configCmd.command("set-key").description("\u8BBE\u7F6E API Key").argument("<token>", "API Key \u4EE4\u724C").action((token, cmd) => {
   const config = loadConfig();
   config.apiKey = token;
@@ -1141,9 +1290,31 @@ ${body}
 }
 
 // src/index.js
-var program = new Command9();
+var program = new Command10();
 program.name("c456").description("C456 CLI - \u5FEB\u901F\u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177").version(package_default.version);
-program.addHelpText("before", () => getHelpBanner());
+program.addHelpText("before", () => {
+  const banner = getHelpBanner();
+  const versionLine = `c456-cli ${package_default.version}`;
+  if (!banner) {
+    return `
+${versionLine}
+`;
+  }
+  return `${banner}
+${versionLine}
+`;
+});
+program.exitOverride((err) => {
+  if (err.code === "commander.executeSubCommandAsync") {
+    process.exit(err.exitCode ?? 1);
+    return;
+  }
+  if (err.code === "commander.help" && err.exitCode === 1) {
+    process.exit(0);
+    return;
+  }
+  process.exit(err.exitCode ?? 1);
+});
 program.option(
   "-B, --base-url <url>",
   "C456 \u7AD9\u70B9\u6839\u5730\u5740\uFF1B\u672A\u4F20\u5219\u4F7F\u7528 C456_URL \u73AF\u5883\u53D8\u91CF\u6216 ~/.config/c456/config.json \u7684 baseUrl\uFF0C\u9ED8\u8BA4 https://c456.com"
@@ -1155,6 +1326,7 @@ program.addCommand(fetch_default);
 program.addCommand(search_default);
 program.addCommand(playbook_default);
 program.addCommand(walkthrough_default);
+program.addCommand(asset_default);
 program.addCommand(intake_default);
 program.addCommand(config_default);
 program.on("--help", () => {

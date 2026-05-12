@@ -92,6 +92,8 @@ intake
   .option("-t, --title <title>", "新标题")
   .option("-b, --body <text>", "新正文（不推荐直接传；请用 --body-file）")
   .option("--body-file <path>", "新正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
+  .option("--profile-data-json <json>", "tool/channel：profile_data 片段（JSON 字符串，与 API 合并规则一致）")
+  .option("--profile-data-json-file <path>", "从文件读取 profile_data 片段 JSON（与 --profile-data-json 互斥）")
   .option("--favorited", "标记为收藏")
   .option("--unfavorited", "取消收藏")
   .action(async (id, opts, cmd) => {
@@ -111,8 +113,34 @@ intake
     }
     if (opts.bodyFile) body.body = readTextFile(opts.bodyFile);
     if (opts.body) body.body = opts.body;
+    if (opts.profileDataJson && opts.profileDataJsonFile) {
+      console.error("错误：--profile-data-json 与 --profile-data-json-file 不能同时使用");
+      process.exit(1);
+    }
+    if (opts.profileDataJsonFile) {
+      try {
+        body.profile_data = JSON.parse(readTextFile(opts.profileDataJsonFile));
+      } catch (e) {
+        console.error(`错误：无法解析 profile_data JSON（${e.message}）`);
+        process.exit(1);
+      }
+    } else if (opts.profileDataJson) {
+      try {
+        body.profile_data = JSON.parse(opts.profileDataJson);
+      } catch (e) {
+        console.error(`错误：无法解析 --profile-data-json（${e.message}）`);
+        process.exit(1);
+      }
+    }
     if (opts.favorited) body.favorited = true;
     if (opts.unfavorited) body.favorited = false;
+
+    if (Object.keys(body).length === 0) {
+      console.error(
+        "错误：请至少提供 --title、--body/--body-file、--profile-data-json/--profile-data-json-file 或 --favorited/--unfavorited",
+      );
+      process.exit(1);
+    }
 
     try {
       await client.patch(`/intakes/${id}`, body);

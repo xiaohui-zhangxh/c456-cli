@@ -2,6 +2,8 @@
 
 服务端模型与校验见 C456 仓库 `IntakeProfileRegistry`、`Intake`（`profile_data` 为 JSON）。CLI 创建/更新收录时通过 `**--profile-data-json '<json>'**` 传入**单个 JSON 字符串**（注意 shell 引号；长 JSON 建议写入 `.tmp/*.json` 后再用 `"$(cat .tmp/xxx.json)"` 传入）。
 
+**仅改列表图标、不手改整段 facets**：`PATCH /api/v1/intakes/:id` 会与已有 `profile_data` **按键合并**；可只传 `{ "list_icon_url": "<url>" }` 等（详见 [media-library-and-icons.md](media-library-and-icons.md)）。CLI：`c456 intake update <id> --profile-data-json-file .tmp/patch.json`。
+
 ## 顶层结构
 
 ```json

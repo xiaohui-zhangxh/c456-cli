@@ -118,6 +118,20 @@ c456 walkthrough new -t "标题" --cast-file ./demo.cast
 c456 walkthrough list
 ```
 
+### 素材库（图片）
+
+```bash
+c456 asset upload -f ./diagram.png
+c456 asset list
+c456 asset show <id>
+c456 asset update <id> --filename logo.webp
+c456 asset delete <id>
+c456 asset refresh-markdown --body-file ./note.md > ./note.new.md
+c456 asset fingerprint --body-file ./note.md
+```
+
+规格见 C456 主仓 [`docs/20-engineering/specs/api-v1.md`](https://github.com/xiaohui-zhangxh/c456/blob/main/docs/20-engineering/specs/api-v1.md) 与 [`docs/10-product/experience/media-library-v1.md`](https://github.com/xiaohui-zhangxh/c456/blob/main/docs/10-product/experience/media-library-v1.md)。
+
 ### 资料抓取（fetch）
 
 ```bash
