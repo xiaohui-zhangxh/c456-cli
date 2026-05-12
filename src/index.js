@@ -5,6 +5,9 @@
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import intakeCmd from "./commands/intake.js";
+import signalCmd from "./commands/signal.js";
+import toolCmd from "./commands/tool.js";
+import channelCmd from "./commands/channel.js";
 import fetchProfile from "./commands/fetch.js";
 import searchCmd from "./commands/search.js";
 import playbookCmd from "./commands/playbook.js";
@@ -28,11 +31,14 @@ program.option(
 );
 
 // 子命令
-program.addCommand(intakeCmd);
+program.addCommand(signalCmd);
+program.addCommand(toolCmd);
+program.addCommand(channelCmd);
 program.addCommand(fetchProfile);
 program.addCommand(searchCmd);
 program.addCommand(playbookCmd);
 program.addCommand(walkthroughCmd);
+program.addCommand(intakeCmd); // AI 入口：自动识别类型并路由（与 5 大类并存）
 program.addCommand(configCmd);
 
 // 帮助信息增强
@@ -42,7 +48,7 @@ program.on("--help", () => {
   console.log("  c456 config set-key your-api-token");
   console.log("");
   console.log("  # 自托管站点 + 按 URL 收录工具（-B=站点，-u=目标 URL）");
-  console.log('  c456 -B https://c456.example.com intake new -k tool -u "https://github.com/owner/repo"');
+  console.log('  c456 -B https://c456.example.com tool new -u "https://github.com/owner/repo" --auto-resolve-url');
   console.log("");
   console.log("  # 搜索收录");
   console.log('  c456 search signals -q "AI agent"');

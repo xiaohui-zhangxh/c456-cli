@@ -1,23 +1,22 @@
 import { Command } from "commander";
-import { metaPerPage, ApiError } from "../client.js";
+import { metaPerPage } from "../client.js";
 import { resolveApi } from "../context.js";
 import { readTextFile } from "../textFile.js";
 
 const intake = new Command()
   .name("intake")
-  .description("收录管理 - 创建、更新、删除工具/渠道/信号");
+  .description("AI 录入入口 - 自动识别类型并创建（signal/tool/channel/playbook；walkthrough 需走 walkthrough 命令）");
 
 // intake new
 intake
   .command("new")
-  .description("创建新收录")
-  .option("-u, --url <url>", "目标 URL（tool/channel 时可选；配合 --auto-resolve-url 可自动解析资料）")
-  .option("-k, --kind <type>", "类型：signal/tool/channel（默认 signal）", "signal")
-  .option("-t, --title <title>", "标题（tool/channel 必填）")
+  .description("AI 自动识别并创建（旧的 kind 手动创建请改用 signal/tool/channel 子命令）")
+  .option("-u, --url <url>", "可选：目标 URL（有时有助于 AI 判断）")
+  .option("--hint <type>", "可选：提示类型 signal/tool/channel/playbook（不会强制）")
+  .option("-t, --title <title>", "可选：标题（AI 可能会重写）")
   .option("-b, --body <text>", "正文/描述（不推荐直接传；请用 --body-file）")
   .option("--body-file <path>", "正文文件路径（type: markdown_kramdown；建议写到当前目录 .tmp/）")
-  .option("--profile-data-json <json>", "资料段 JSON（tool/channel）")
-  .option("--auto-resolve-url", "自动解析 URL 并填充资料段 profile_data（仅 tool/channel；会发起网络请求）")
+  .option("--dry-run", "只做识别与草稿生成，不落库（若服务端支持）")
   .action(async (opts, cmd) => {
     const { apiKey, baseUrl, client } = resolveApi(cmd);
 
@@ -33,66 +32,24 @@ intake
         process.exit(1);
       }
       const bodyText = opts.bodyFile ? readTextFile(opts.bodyFile) : (opts.body || "");
-      const body = {
-        kind: opts.kind,
+      const payload = {
         title: opts.title || "",
         body: bodyText,
+        url: opts.url || "",
+        hint: opts.hint || "",
+        dry_run: Boolean(opts.dryRun),
       };
 
-      if (opts.url) {
-        body.url = opts.url;
-      }
+      const result = await client.post("/intakes/ai", payload);
 
-      if (opts.profileDataJson) {
-        body.profile_data_json = opts.profileDataJson;
-      }
-      
-      const kind = String(opts.kind ?? "signal");
-      if (opts.autoResolveUrl) {
-        if (!opts.url) {
-          console.error("错误：使用 --auto-resolve-url 时必须同时提供 -u/--url");
-          process.exit(1);
-        }
-        if (kind !== "tool" && kind !== "channel") {
-          console.error("错误：--auto-resolve-url 仅适用于 -k tool 或 -k channel");
-          process.exit(1);
-        }
-        body.auto_resolve_url = true;
-      }
-
-      const result = await client.post("/intakes", body);
-
-      console.log("✅ 收录创建成功");
-      console.log(`   ID: ${result.data.id}`);
-      console.log(`   类型：${result.data.kind}`);
-      console.log(`   标题：${result.data.title || "(无)"}`);
+      console.log("✅ AI 识别成功");
+      if (result.data.kind) console.log(`   识别类型：${result.data.kind}`);
+      if (result.data.id) console.log(`   ID: ${result.data.id}`);
+      if (result.data.title) console.log(`   标题：${result.data.title}`);
       console.log("\n--- JSON ---");
-      console.log(
-        JSON.stringify(
-          {
-            id: result.data.id,
-            kind: result.data.kind,
-            title: result.data.title || "",
-          },
-          null,
-          2
-        )
-      );
+      console.log(JSON.stringify(result.data, null, 2));
     } catch (err) {
       console.error(`❌ 创建失败：${err.message}`);
-      const kind = String(opts.kind ?? "signal");
-      const urlHint =
-        Boolean(opts.url) &&
-        kind === "signal" &&
-        err instanceof ApiError &&
-        err.status === 422;
-      if (urlHint) {
-        console.error("");
-        console.error("提示：当前为 signal（默认）。若要解析 URL 的资料段，请使用 `-k tool`/`-k channel` 并显式开启 `--auto-resolve-url`。");
-        console.error("  示例：");
-        console.error('    c456 -B <站点> intake new -k channel -u "<频道或主页 URL>" --auto-resolve-url');
-        console.error('    c456 -B <站点> intake new -k tool -u "<工具 / 仓库 URL>" --auto-resolve-url');
-      }
       process.exit(1);
     }
   });

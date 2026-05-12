@@ -83,19 +83,31 @@ c456 config show
 
 ## 常用命令
 
-### 收录（intake）
+### 数据管理（5 大类）
 
 ```bash
-# 按 URL 创建 tool 收录（-B 为站点，-u 为收录目标）
-c456 -B https://c456.example.com intake new -k tool -u "https://github.com/owner/repo" --auto-resolve-url
+# 工具
+c456 tool new -u "https://github.com/owner/repo" --auto-resolve-url
+
+# 渠道
+c456 channel new -u "https://example.com" --auto-resolve-url
 
 # 纯文本信号（可无 URL）
-c456 intake new -k signal -t "标题" -b "正文"
+c456 signal new -t "标题" -b "正文"
 
-c456 intake show <id>
-c456 intake list -k signal -q "关键词"
-c456 intake update <id> -t "新标题"
-c456 intake delete <id> --force
+c456 signal show <id>
+c456 signal list -q "关键词" --stage raw
+c456 signal refine <id> --to cleaned --ai
+c456 signal update <id> --refinement-status approved
+
+# 打法（M1/M2 仍为独立资源；M3 会逐步合回 Intake）
+c456 playbook new -t "标题" -b "Markdown 正文"
+c456 playbook show <id>
+c456 playbook list -q "关键词"
+
+# 讲解
+c456 walkthrough new -t "标题" --cast-file ./demo.cast
+c456 walkthrough list
 ```
 
 ### 资料抓取（fetch）
@@ -110,6 +122,16 @@ c456 fetch profile -u "https://..." -p link_product
 c456 search signals -q "关键词"
 c456 search playbooks -q "关键词"
 ```
+
+### AI 自动识别入口（intake）
+
+`intake` 保留为 **AI 识别与录入** 的入口：当你不确定应该落到 signal/tool/channel/playbook 时使用。
+
+```bash
+c456 intake new -t "疑似工具/渠道/信号" -b "一段描述或粘贴内容"
+```
+
+当 AI 判断不在 `signal/tool/channel/playbook/walkthrough` 五类范围内，会返回 422 并给出错误提示；若识别为 `walkthrough`，会提示改用 `walkthrough` 子命令（因为需要媒体文件/外链）。
 
 ### 打法（playbook）
 
