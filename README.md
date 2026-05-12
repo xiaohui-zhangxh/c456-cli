@@ -12,6 +12,14 @@
 
 C456 命令行工具：通过 **HTTP API v1** 读写收录、打法等数据，适合本地使用或与 AI Agent 集成。
 
+## 用 C456 搭建私人知识库
+
+若你希望把 **[c456.com](https://c456.com)** 当作私人或团队的**云端知识底座**——在本地用「卡帕西式」Wiki 维护笔记与素材，用本 CLI 与线上收录做**同步**，并按权限**对内协作或对外分享**——请直接阅读独立指南：
+
+**[私人知识库：方案与操作步骤](https://github.com/xiaohui-zhangxh/c456-cli/blob/main/docs/private-knowledge-base.md)**（克隆仓库后也可打开 [`docs/private-knowledge-base.md`](./docs/private-knowledge-base.md)）
+
+该流程会串联：**注册 C456 → 安装配置 c456-cli → 安装 [Karpathy Wiki](https://github.com/baklib-tools/skills/tree/main/skills/karpathy-wiki) 技能 → 安装 [c456-llm-wiki](https://github.com/xiaohui-zhangxh/c456-cli/tree/main/skills/c456-llm-wiki) 双向同步规范**。
+
 ## 安装
 
 ```bash
