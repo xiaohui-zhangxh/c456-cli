@@ -2,8 +2,11 @@
 name: c456-cli
 description: >-
   Operates C456 via the c456 Node CLI (HTTP API v1): intakes, playbooks,
-  assets (media library), search, fetch, and config. Use when the user mentions C456, c456-cli, 收录,
-  打法, intake, playbook, c456.com, or syncing content with a self-hosted C456.
+  assets (media library), search, fetch, and config. Includes headed Chrome via CDP (browser start /
+  screenshot, system Chrome + playwright-core, no bundled Chromium required) for tool/channel intro
+  screenshots, then asset upload. Use when the user mentions C456, c456-cli, 收录, 打法, intake,
+  playbook, c456.com, or syncing content with a self-hosted C456. Skill install delegates to npx skills add
+  from GitHub only (no local package fallback) plus optional daily npm version notify on next launch.
 ---
 
 # C456 CLI（c456-cli）
@@ -16,7 +19,29 @@ description: >-
 
 ## 安装本技能（给其他仓库）
 
-在目标项目根目录执行（按需加 `-g` 装到用户目录、`--agent cursor` 指定客户端）：
+**推荐**：在目标项目根目录执行（内部调用官方 **`npx skills add`**，需本机可执行 `npx`）：
+
+```bash
+c456 skill install
+```
+
+私人知识库场景可**一条命令**装齐 **karpathy-wiki**、**c456-llm-wiki** 与 **c456-cli**：
+
+```bash
+c456 skill install --with-wiki
+```
+
+上述流程均为 **`npx skills add` 从网络拉取**（先 `baklib-tools/skills` 的 **karpathy-wiki**，再 GitHub 源的 **c456-llm-wiki** 与 **c456-cli**）。详见 [`docs/private-knowledge-base.md`](../../docs/private-knowledge-base.md) §3。
+
+仅装 **c456-cli**、不要 Wiki 套件时：
+
+```bash
+c456 skill install
+```
+
+顺序为：仅依次尝试 **`c456-cli`** 的 GitHub 源；**失败则退出**（无本地包复制）。可用 **`-C/--cwd`**、**`-g`**、**`-a`**、**`--copy`**，语义与 `skills add` 一致（`-a` 用于指定 Agent，如 `cursor`、`claude-code` 等）。
+
+也可自行执行：
 
 ```bash
 npx skills add xiaohui-zhangxh/c456-cli --skill c456-cli -y
@@ -34,8 +59,8 @@ npx skills add . --skill c456-cli -y
 
 | 方式 | 说明 |
 | --- | --- |
-| **API Key** | `c456 config set-key <token>` 或环境变量 **`C456_API_KEY`** |
-| **站点根 URL** | 默认 `https://c456.com`；自托管用 **`c456 config set-url <url>`**、**`C456_URL`**，或单次命令 **`c456 -B <url> …`** |
+| **API Key** | `c456 config set-key <token>`（默认写入自 cwd 解析的 **`.c456-cli/config.json`**；全局用户配置加 **`-g`**）或 **`C456_API_KEY`** |
+| **站点根 URL** | 默认 `https://c456.com`；自托管用 **`c456 config set-url <url>`**（同上 **`-g`**）、**`C456_URL`**，或单次 **`c456 -B <url> …`**。有效配置为 **全局 + 项目合并**（项目覆盖）；工作区由自 cwd 向上的 **`.c456-cli`** 或 **`C456_WORKSPACE`** 决定 |
 
 **短选项冲突**：子命令里的 **`-k` 表示收录类型（kind）**，**不要**用 `-k` 传 API Key。Key 仅通过 `config` / `C456_API_KEY`。
 
@@ -52,12 +77,22 @@ npx skills add . --skill c456-cli -y
 7. **自媒体账号默认收录为渠道**：用户要收录 **YouTube / 抖音 / 小红书 / B 站 / 微博** 等**自媒体账号主页或频道**时，**默认使用 `c456 intake new -k channel`**（不要用 `-k tool`），并配合 `-u <主页或频道 URL>`；需要服务端按 URL 自动填资料段时再加 `--auto-resolve-url`。仅做「不落库的 URL 资料预览/抓取」时用 `c456 fetch profile -p social_account -u "<url>"`。
 8. **渠道（及 tool）必须带至少一条「资料」**：`-k channel` 或 `-k tool` 时，服务端要求 **profile_data 里至少有一条资料段**（例如主页 **URL**、**媒体账号** 等对应 facet），常见做法是 `-u <url>` 并加 **`--auto-resolve-url`** 让服务端生成资料段；如需手写 **`--profile-data-json`**，**必须先阅读** [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（含各 `profile_id`、必填字段与最小 JSON 示例）。**不能只写标题/正文而不提供 URL/资料段**，否则会 **422 校验失败**（提示含「至少添加一个资料段或图标」等）。
 9. **素材库与列表图标**：上传、插入正文、设置 tool/channel 列表图标（`list_icon_url`）见 [references/media-library-and-icons.md](references/media-library-and-icons.md)；CLI：`c456 asset …`、`c456 intake update … --profile-data-json-file`。
+10. **工具 / 渠道介绍里的产品截图**：优先 **`c456 browser start`**（持久 profile：`~/.cache/c456-cli/chrome-profile`，可保留登录态）→ 需要时在窗口内登录 → **`c456 screenshot <url> [-o .tmp/…]`** 复用 CDP；结束用 **`c456 browser stop`**。无长会话时可只跑 **`c456 screenshot <url>`**（可省略 **`-o`**，在当前目录按 URL 生成文件名）。然后 **`c456 asset upload`** → **`markdownSnippet`** 写入 **`--body-file`**。详见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)（**不用** IDE MCP；不强制安装 Playwright 自带 Chromium，见 README）。
 
 ## 命令速查
 
 **配置**
 
-- `c456 config set-key <token>` / `c456 config set-url <url>` / `c456 config show` / `c456 config reset`
+- `c456 config set-key <token> [-g]` / `set-url <url> [-g]` / `show [-g]` / `reset [-g] [-f]`（`-g` = 仅全局 `~/.config/c456`；默认 = 项目 `.c456-cli`）
+
+**技能 `skill`**
+
+- `c456 skill install [--with-wiki] [-C <cwd>] [-g] [-a <agent>] [--copy]`（仅 `npx skills add`；`--with-wiki` 时装 karpathy-wiki、c456-llm-wiki 与 c456-cli，见 docs/private-knowledge-base.md §3）
+
+**浏览器（系统 Chrome + CDP）**
+
+- `c456 browser start [-p 端口]` · `stop` · `status`（持久 profile 默认 `~/.cache/c456-cli/chrome-profile`）
+- `c456 screenshot <url> [-o <path>] [--full-page] [--viewport 1280x720] [--wait-after-load ms] [--no-reuse]`（默认 **`--wait-after-load 3000`** 便于 JS/动画；`0` 为不等待；省略 `-o` 时按 URL 生成文件名；默认复用 `browser start`）
 
 **收录 `intake`**
 
@@ -115,4 +150,5 @@ CLI `--help` 中会用 `type: <type_name>` 标注字段类型；Agent 在生成/
 - **渠道 / 工具**：新建时务必带上 **至少一种结构化资料**（常见：`-u` + `--auto-resolve-url`，或 `--profile-data-json`），否则服务端会因缺少资料段而拒绝保存。
 - **`--profile-data-json`**：键名与校验规则与 Web 端一致，**不要编造字段**；完整说明与示例见 [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（优先自动解析，其次再手写）。**仅改列表图标**见 [references/media-library-and-icons.md](references/media-library-and-icons.md)。
 - **软件 / 产品 / 仓库 / 包页**：一般用 `-k tool`（或用户明确要当「工具资料」收录时）。
+- **产品界面进介绍**：优先 **`c456 browser` + `c456 screenshot`**（见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)）→ `asset upload` → `body`（`--body-file`）；**不用** IDE MCP。
 

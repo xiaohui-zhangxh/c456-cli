@@ -1,6 +1,6 @@
 {
   "name": "c456-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "C456 CLI - 内容录入与整理工具",
   "type": "module",
   "bin": {
@@ -19,7 +19,8 @@
   "dependencies": {
     "cfonts": "^3.3.1",
     "commander": "^12.1.0",
-    "open": "^10.1.0"
+    "open": "^10.1.0",
+    "playwright-core": "^1.50.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

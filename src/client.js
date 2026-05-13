@@ -1,43 +1,50 @@
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  getGlobalConfigPath,
+  loadMergedConfigSources,
+  resolveLocalConfigWritePath,
+} from "./lib/workspaceConfig.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-export const CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.USERPROFILE || ".", ".config", "c456");
-export const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+/** @deprecated 使用 getGlobalConfigPath() */
+export const CONFIG_PATH = getGlobalConfigPath();
 
 /**
- * 读取配置文件
+ * 合并后的有效配置（全局 ~/.config/c456 + 项目 `.c456-cli/config.json`，后者优先）
  */
 export function loadConfig() {
-  try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
+  return loadMergedConfigSources().merged;
 }
 
 /**
- * 保存配置文件
+ * 将若干字段写入指定范围：`-g` 为全局；否则写入当前解析到的项目 `.c456-cli`（无则落在 cwd 下新建）
+ * @param {Record<string, unknown>} patch
+ * @param {{ global?: boolean }} [options]
  */
-export async function saveConfig(config) {
+export async function saveConfigPatch(patch, options = {}) {
   const fs = await import("node:fs");
-  const path = await import("node:path");
-  const dir = path.dirname(CONFIG_PATH);
-  
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  const pathMod = await import("node:path");
+  const global = options.global === true;
+  const targetPath = global ? getGlobalConfigPath() : resolveLocalConfigWritePath();
+
+  let existing = {};
+  try {
+    const raw = fs.readFileSync(targetPath, "utf-8");
+    const o = JSON.parse(raw);
+    if (o && typeof o === "object" && !Array.isArray(o)) existing = o;
+  } catch {
+    /* 无文件或解析失败 */
   }
-  
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+
+  const next = { ...existing, ...patch };
+  fs.mkdirSync(pathMod.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, JSON.stringify(next, null, 2), "utf-8");
 }
 
 /**
  * 获取 API Key（环境变量 `C456_API_KEY` > 配置文件 `apiKey`；无命令行传参，避免与 `intake`/`search` 等子命令的 `-k`（kind）冲突）
  */
 export function getApiKey() {
-  return process.env.C456_API_KEY || loadConfig().apiKey || null;
+  const v = process.env.C456_API_KEY || loadConfig().apiKey;
+  return v !== undefined && v !== null && String(v).trim() !== "" ? String(v) : null;
 }
 
 /**
@@ -49,7 +56,8 @@ export function getBaseUrl(cliBaseUrl) {
     cliBaseUrl !== undefined && cliBaseUrl !== null && String(cliBaseUrl).trim() !== ""
       ? String(cliBaseUrl).replace(/\/+$/, "")
       : null;
-  const raw = fromCli || process.env.C456_URL || loadConfig().baseUrl || "https://c456.com";
+  const fromFile = loadConfig().baseUrl;
+  const raw = fromCli || process.env.C456_URL || fromFile || "https://c456.com";
   return String(raw).replace(/\/+$/, "");
 }
 
@@ -268,3 +276,11 @@ export class ApiError extends Error {
     this.code = meta.code;
   }
 }
+
+export {
+  CLI_DIR_NAME,
+  getGlobalConfigPath,
+  getWorkspaceRoot,
+  loadMergedConfigSources,
+  resolveLocalConfigWritePath,
+} from "./lib/workspaceConfig.js";

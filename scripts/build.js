@@ -15,7 +15,7 @@ async function build() {
     format: "esm",
     target: "node20",
     outfile: join(rootDir, "dist", "index.js"),
-    external: ["commander", "open", "cfonts"], // cfonts 为独立包（许可证见 node_modules/cfonts）
+    external: ["commander", "open", "cfonts", "playwright-core"], // cfonts 为独立包（许可证见 node_modules/cfonts）
     minify: false,
     sourcemap: false,
   });

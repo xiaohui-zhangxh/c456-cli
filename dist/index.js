@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 // src/index.js
-import { Command as Command10 } from "commander";
+import { Command as Command13 } from "commander";
 
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.3.0",
+  version: "0.4.0",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -25,7 +25,8 @@ var package_default = {
   dependencies: {
     cfonts: "^3.3.1",
     commander: "^12.1.0",
-    open: "^10.1.0"
+    open: "^10.1.0",
+    "playwright-core": "^1.50.0"
   },
   devDependencies: {
     esbuild: "^0.24.0"
@@ -51,36 +52,107 @@ var package_default = {
 // src/commands/intake.js
 import { Command } from "commander";
 
-// src/client.js
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-var __dirname = dirname(fileURLToPath(import.meta.url));
-var CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.USERPROFILE || ".", ".config", "c456");
-var CONFIG_PATH = join(CONFIG_DIR, "config.json");
-function loadConfig() {
+// src/lib/workspaceConfig.js
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+var CLI_DIR_NAME = ".c456-cli";
+function getGlobalConfigDir() {
+  const home = os.homedir();
+  const base = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+  return path.join(base, "c456");
+}
+function getGlobalConfigPath() {
+  return path.join(getGlobalConfigDir(), "config.json");
+}
+function findWorkspaceRootWalk(startDir) {
+  let cur = path.resolve(startDir);
+  for (; ; ) {
+    const marker = path.join(cur, CLI_DIR_NAME);
+    try {
+      if (fs.existsSync(marker) && fs.statSync(marker).isDirectory()) {
+        return cur;
+      }
+    } catch {
+    }
+    const parent = path.dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+function getWorkspaceRoot() {
+  const raw = process.env.C456_WORKSPACE?.trim();
+  if (raw) {
+    return path.resolve(raw);
+  }
+  return findWorkspaceRootWalk(process.cwd());
+}
+function getProjectConfigPath(workspaceRoot) {
+  return path.join(workspaceRoot, CLI_DIR_NAME, "config.json");
+}
+function resolveLocalConfigWritePath() {
+  const root = getWorkspaceRoot();
+  if (root) return getProjectConfigPath(root);
+  return path.join(process.cwd(), CLI_DIR_NAME, "config.json");
+}
+function loadMergedConfigSources() {
+  const globalPath = getGlobalConfigPath();
+  const globalCfg = readJsonFile(globalPath);
+  const workspaceRoot = getWorkspaceRoot();
+  if (!workspaceRoot) {
+    return { merged: { ...globalCfg }, globalPath, localPath: null, workspaceRoot: null };
+  }
+  const localPath = getProjectConfigPath(workspaceRoot);
+  if (!fs.existsSync(localPath)) {
+    return { merged: { ...globalCfg }, globalPath, localPath, workspaceRoot };
+  }
+  const localCfg = readJsonFile(localPath);
+  return {
+    merged: { ...globalCfg, ...localCfg },
+    globalPath,
+    localPath,
+    workspaceRoot
+  };
+}
+function readJsonFile(filePath) {
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw);
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
   } catch {
     return {};
   }
 }
-async function saveConfig(config) {
-  const fs = await import("node:fs");
-  const path = await import("node:path");
-  const dir = path.dirname(CONFIG_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+
+// src/client.js
+var CONFIG_PATH = getGlobalConfigPath();
+function loadConfig() {
+  return loadMergedConfigSources().merged;
+}
+async function saveConfigPatch(patch, options = {}) {
+  const fs9 = await import("node:fs");
+  const pathMod = await import("node:path");
+  const global = options.global === true;
+  const targetPath = global ? getGlobalConfigPath() : resolveLocalConfigWritePath();
+  let existing = {};
+  try {
+    const raw = fs9.readFileSync(targetPath, "utf-8");
+    const o = JSON.parse(raw);
+    if (o && typeof o === "object" && !Array.isArray(o)) existing = o;
+  } catch {
   }
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  const next = { ...existing, ...patch };
+  fs9.mkdirSync(pathMod.dirname(targetPath), { recursive: true });
+  fs9.writeFileSync(targetPath, JSON.stringify(next, null, 2), "utf-8");
 }
 function getApiKey() {
-  return process.env.C456_API_KEY || loadConfig().apiKey || null;
+  const v = process.env.C456_API_KEY || loadConfig().apiKey;
+  return v !== void 0 && v !== null && String(v).trim() !== "" ? String(v) : null;
 }
 function getBaseUrl(cliBaseUrl) {
   const fromCli = cliBaseUrl !== void 0 && cliBaseUrl !== null && String(cliBaseUrl).trim() !== "" ? String(cliBaseUrl).replace(/\/+$/, "") : null;
-  const raw = fromCli || process.env.C456_URL || loadConfig().baseUrl || "https://c456.com";
+  const fromFile = loadConfig().baseUrl;
+  const raw = fromCli || process.env.C456_URL || fromFile || "https://c456.com";
   return String(raw).replace(/\/+$/, "");
 }
 function getRootCommand(cmd) {
@@ -129,8 +201,8 @@ var ApiClient = class {
   /**
    * GET 请求
    */
-  async get(path, params = {}) {
-    const url = new URL(`${this.baseUrl}/api/v1${path}`);
+  async get(path6, params = {}) {
+    const url = new URL(`${this.baseUrl}/api/v1${path6}`);
     Object.entries(params).forEach(([k, v]) => {
       if (v !== void 0 && v !== null) url.searchParams.set(k, String(v));
     });
@@ -140,8 +212,8 @@ var ApiClient = class {
   /**
    * POST 请求
    */
-  async post(path, body = {}) {
-    const url = `${this.baseUrl}/api/v1${path}`;
+  async post(path6, body = {}) {
+    const url = `${this.baseUrl}/api/v1${path6}`;
     const res = await fetch(url, {
       method: "POST",
       headers: this.headers(),
@@ -155,17 +227,17 @@ var ApiClient = class {
    * @param {Record<string, any>} fields
    * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
    */
-  async postMultipart(path, fields = {}, file = null) {
-    const url = `${this.baseUrl}/api/v1${path}`;
+  async postMultipart(path6, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path6}`;
     const form = new FormData();
     Object.entries(fields || {}).forEach(([k, v]) => {
       if (v === void 0 || v === null) return;
       form.append(k, String(v));
     });
     if (file && file.filePath) {
-      const fs = await import("node:fs");
+      const fs9 = await import("node:fs");
       const pathMod = await import("node:path");
-      const bytes = fs.readFileSync(file.filePath);
+      const bytes = fs9.readFileSync(file.filePath);
       const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
       const name = file.filename || pathMod.basename(file.filePath);
       form.append(file.fieldName, blob, name);
@@ -182,8 +254,8 @@ var ApiClient = class {
   /**
    * PATCH 请求
    */
-  async patch(path, body = {}) {
-    const url = `${this.baseUrl}/api/v1${path}`;
+  async patch(path6, body = {}) {
+    const url = `${this.baseUrl}/api/v1${path6}`;
     const res = await fetch(url, {
       method: "PATCH",
       headers: this.headers(),
@@ -197,17 +269,17 @@ var ApiClient = class {
    * @param {Record<string, any>} fields
    * @param {{ fieldName: string, filePath: string, filename?: string, contentType?: string } | null} file
    */
-  async patchMultipart(path, fields = {}, file = null) {
-    const url = `${this.baseUrl}/api/v1${path}`;
+  async patchMultipart(path6, fields = {}, file = null) {
+    const url = `${this.baseUrl}/api/v1${path6}`;
     const form = new FormData();
     Object.entries(fields || {}).forEach(([k, v]) => {
       if (v === void 0 || v === null) return;
       form.append(k, String(v));
     });
     if (file && file.filePath) {
-      const fs = await import("node:fs");
+      const fs9 = await import("node:fs");
       const pathMod = await import("node:path");
-      const bytes = fs.readFileSync(file.filePath);
+      const bytes = fs9.readFileSync(file.filePath);
       const blob = new Blob([bytes], { type: file.contentType || "application/octet-stream" });
       const name = file.filename || pathMod.basename(file.filePath);
       form.append(file.fieldName, blob, name);
@@ -224,8 +296,8 @@ var ApiClient = class {
   /**
    * DELETE 请求
    */
-  async delete(path) {
-    const url = `${this.baseUrl}/api/v1${path}`;
+  async delete(path6) {
+    const url = `${this.baseUrl}/api/v1${path6}`;
     const res = await fetch(url, {
       method: "DELETE",
       headers: this.headers()
@@ -273,13 +345,13 @@ function resolveApi(cmd) {
 }
 
 // src/textFile.js
-import { readFileSync as readFileSync2 } from "node:fs";
-function readTextFile(path) {
+import { readFileSync } from "node:fs";
+function readTextFile(path6) {
   try {
-    return readFileSync2(path, "utf-8");
+    return readFileSync(path6, "utf-8");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`\u9519\u8BEF\uFF1A\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${path}`);
+    console.error(`\u9519\u8BEF\uFF1A\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${path6}`);
     console.error(msg);
     process.exit(1);
   }
@@ -1192,38 +1264,579 @@ assetCmd.command("fingerprint").description("\u5BF9\u6B63\u6587\u505A\u4E0E\u670
 });
 var asset_default = assetCmd;
 
-// src/commands/config.js
+// src/commands/browser.js
+import fs5 from "node:fs";
 import { Command as Command9 } from "commander";
-var configCmd = new Command9().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740");
-configCmd.command("set-key").description("\u8BBE\u7F6E API Key").argument("<token>", "API Key \u4EE4\u724C").action((token, cmd) => {
-  const config = loadConfig();
-  config.apiKey = token;
-  saveConfig(config);
-  console.log("\u2705 API Key \u5DF2\u4FDD\u5B58\u81F3 ~/.config/c456/config.json");
+
+// src/lib/chromeExecutable.js
+import fs2 from "node:fs";
+import path2 from "node:path";
+import process2 from "node:process";
+function exists(p) {
+  try {
+    fs2.accessSync(p, fs2.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function resolveChromeExecutable() {
+  const env = process2.env.CHROME_PATH?.trim();
+  if (env && exists(env)) return env;
+  const platform = process2.platform;
+  const candidates = [];
+  if (platform === "darwin") {
+    candidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
+    );
+  } else if (platform === "win32") {
+    const pf = process2.env["PROGRAMFILES"] || "C:\\\\Program Files";
+    const pf86 = process2.env["PROGRAMFILES(X86)"] || "C:\\\\Program Files (x86)";
+    candidates.push(
+      path2.join(pf, "Google", "Chrome", "Application", "chrome.exe"),
+      path2.join(pf86, "Google", "Chrome", "Application", "chrome.exe")
+    );
+  } else {
+    candidates.push(
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/snap/bin/chromium"
+    );
+  }
+  for (const p of candidates) {
+    if (exists(p)) return p;
+  }
+  return null;
+}
+function chromeExecutableHint() {
+  return [
+    "\u672A\u627E\u5230 Chrome / Chromium \u53EF\u6267\u884C\u6587\u4EF6\u3002",
+    "\u8BF7\u5B89\u88C5 Google Chrome\uFF0C\u6216\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF CHROME_PATH \u6307\u5411\u53EF\u6267\u884C\u6587\u4EF6\u3002",
+    "\uFF08\u53EF\u9009\uFF09\u5728\u65E0\u7CFB\u7EDF Chrome \u7684\u73AF\u5883\u53EF\u5B89\u88C5 Playwright \u81EA\u5E26 Chromium\uFF1A",
+    "  npx playwright install chromium",
+    "\u7136\u540E\u5B89\u88C5 npm \u5305 playwright\uFF0C\u5E76\u628A CHROME_PATH \u8BBE\u4E3A `node -e \"console.log(require('playwright').chromium.executablePath())\"` \u7684\u8F93\u51FA\u3002"
+  ].join("\n");
+}
+
+// src/lib/chromeCdp.js
+import http from "node:http";
+import { spawn } from "node:child_process";
+import process3 from "node:process";
+function cdpHttpUrl(port) {
+  return `http://127.0.0.1:${port}`;
+}
+async function waitForCdpHttp(port, timeoutMs = 45e3) {
+  const url = `${cdpHttpUrl(port)}/json/version`;
+  const start = Date.now();
+  let lastErr;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const body = await httpGet(url);
+      if (body && body.includes("webSocketDebuggerUrl")) {
+        return JSON.parse(body);
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  throw new Error(
+    `\u7B49\u5F85 Chrome DevTools \u7AEF\u53E3 ${port} \u8D85\u65F6${lastErr ? `\uFF1A${lastErr.message}` : ""}`
+  );
+}
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => {
+        data += c;
+      });
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", reject);
+    req.setTimeout(2e3, () => {
+      req.destroy();
+      reject(new Error("\u8BF7\u6C42\u8D85\u65F6"));
+    });
+  });
+}
+function spawnChromeWithCdp(chromePath, { userDataDir, port, extraArgs = [] }) {
+  const args = [
+    `--user-data-dir=${userDataDir}`,
+    `--remote-debugging-port=${port}`,
+    "--remote-allow-origins=*",
+    "--no-first-run",
+    "--no-default-browser-check",
+    ...extraArgs
+  ];
+  const child = spawn(chromePath, args, {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process3.env }
+  });
+  child.unref();
+  return { child, port };
+}
+function killProcessTree(pid) {
+  if (!pid || pid <= 0) return;
+  if (process3.platform === "win32") {
+    const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      detached: true
+    });
+    killer.unref();
+    return;
+  }
+  try {
+    process3.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      process3.kill(pid, "SIGTERM");
+    } catch {
+    }
+  }
+}
+
+// src/lib/freePort.js
+import net from "node:net";
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const s = net.createServer();
+    s.unref();
+    s.on("error", reject);
+    s.listen(0, "127.0.0.1", () => {
+      const addr = s.address();
+      const port = typeof addr === "object" && addr ? addr.port : null;
+      s.close(() => {
+        if (port) resolve(port);
+        else reject(new Error("\u65E0\u6CD5\u5206\u914D\u672C\u5730\u7AEF\u53E3"));
+      });
+    });
+  });
+}
+function isPortListening(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const s = net.createConnection({ port, host }, () => {
+      s.destroy();
+      resolve(true);
+    });
+    s.on("error", () => resolve(false));
+    s.setTimeout(800, () => {
+      s.destroy();
+      resolve(false);
+    });
+  });
+}
+
+// src/lib/c456Cache.js
+import fs3 from "node:fs";
+import os2 from "node:os";
+import path3 from "node:path";
+function getC456CacheDir() {
+  const home = os2.homedir();
+  const xdgCache = process.env.XDG_CACHE_HOME || path3.join(home, ".cache");
+  return path3.join(xdgCache, "c456-cli");
+}
+function ensureC456CacheDir() {
+  const dir = getC456CacheDir();
+  fs3.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function getPersistentChromeProfileDir() {
+  return path3.join(getC456CacheDir(), "chrome-profile");
+}
+function getBrowserDaemonStatePath() {
+  return path3.join(getC456CacheDir(), "browser-daemon.json");
+}
+function getVersionCheckStatePath() {
+  return path3.join(getC456CacheDir(), "version-check-state.json");
+}
+
+// src/lib/browserDaemon.js
+import fs4 from "node:fs";
+import process4 from "node:process";
+function readJson(path6) {
+  try {
+    return JSON.parse(fs4.readFileSync(path6, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function isPidAlive(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    process4.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function loadReconciledDaemonState() {
+  const path6 = getBrowserDaemonStatePath();
+  const st = readJson(path6);
+  if (!st?.port || !st?.pid) return null;
+  const pidOk = isPidAlive(st.pid);
+  const portOk = await isPortListening(st.port);
+  if (!pidOk || !portOk) {
+    try {
+      fs4.unlinkSync(path6);
+    } catch {
+    }
+    return null;
+  }
+  return { ...st, statePath: path6, cdpHttp: cdpHttpUrl(st.port) };
+}
+function writeDaemonState(state) {
+  ensureC456CacheDir();
+  const path6 = getBrowserDaemonStatePath();
+  fs4.writeFileSync(path6, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+}
+function clearDaemonStateFile() {
+  try {
+    fs4.unlinkSync(getBrowserDaemonStatePath());
+  } catch {
+  }
+}
+
+// src/commands/browser.js
+function requireChrome() {
+  const exe = resolveChromeExecutable();
+  if (!exe) {
+    console.error(chromeExecutableHint());
+    process.exit(1);
+  }
+  return exe;
+}
+var browserCmd = new Command9("browser").name("browser").description(
+  "\u6709\u5934 Chrome\uFF1A\u6301\u4E45 profile\uFF08\u9ED8\u8BA4 ~/.cache/c456-cli/chrome-profile\uFF09\u3001CDP \u7AEF\u53E3\u81EA\u52A8\u5206\u914D\uFF1B\u4FBF\u4E8E\u5148\u767B\u5F55\u518D\u622A\u56FE"
+);
+browserCmd.command("start").description("\u542F\u52A8 Chrome\uFF08\u82E5\u5DF2\u5728\u8FD0\u884C\u5219\u6253\u5370\u73B0\u6709 CDP \u5730\u5740\uFF09").option(
+  "-p, --port <n>",
+  "remote-debugging-port\uFF1B\u9ED8\u8BA4\u81EA\u52A8\u9009\u62E9\u672C\u673A\u53EF\u7528\u7AEF\u53E3"
+).action(async (opts) => {
+  const existing = await loadReconciledDaemonState();
+  if (existing) {
+    console.log("Chrome \u5DF2\u5728\u8FD0\u884C\uFF08CLI \u6258\u7BA1\uFF09\u3002");
+    console.log(`  CDP: ${existing.cdpHttp}`);
+    console.log(`  port: ${existing.port}`);
+    console.log(`  pid: ${existing.pid}`);
+    console.log(`  userDataDir: ${existing.userDataDir}`);
+    return;
+  }
+  const chromePath = requireChrome();
+  ensureC456CacheDir();
+  const userDataDir = getPersistentChromeProfileDir();
+  fs5.mkdirSync(userDataDir, { recursive: true });
+  const port = opts.port != null && opts.port !== "" ? Number.parseInt(String(opts.port), 10) : await getFreePort();
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    console.error("\u9519\u8BEF\uFF1A--port \u65E0\u6548");
+    process.exit(1);
+  }
+  const { child } = spawnChromeWithCdp(chromePath, { userDataDir, port });
+  try {
+    await waitForCdpHttp(port);
+    writeDaemonState({
+      port,
+      pid: child.pid,
+      userDataDir,
+      cdpHttp: cdpHttpUrl(port),
+      mode: "persistent",
+      startedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    console.log("\u2705 \u5DF2\u542F\u52A8\u6709\u5934 Chrome\uFF08\u6301\u4E45 profile\uFF0C\u53EF\u5728\u6B64\u7A97\u53E3\u767B\u5F55\uFF09\u3002");
+    console.log(`  CDP: ${cdpHttpUrl(port)}`);
+    console.log(`  port: ${port}`);
+    console.log(`  pid: ${child.pid}`);
+    console.log(`  userDataDir: ${userDataDir}`);
+    console.log("");
+    console.log("\u7ED3\u675F\u8BF7\u6267\u884C\uFF1Ac456 browser stop");
+    console.log("\u622A\u56FE\u53EF\u6267\u884C\uFF1Ac456 screenshot <url> -o <\u6587\u4EF6.png>\uFF08\u5C06\u590D\u7528\u672C\u5B9E\u4F8B\uFF09");
+  } catch (e) {
+    killProcessTree(child.pid);
+    clearDaemonStateFile();
+    console.error(e?.message || e);
+    process.exit(1);
+  }
+});
+browserCmd.command("stop").description("\u5173\u95ED\u7531 c456 browser start \u542F\u52A8\u7684 Chrome \u5E76\u91CA\u653E\u7AEF\u53E3\u8BB0\u5F55").action(async () => {
+  const st = await loadReconciledDaemonState();
+  if (!st) {
+    console.log("\u5F53\u524D\u6CA1\u6709\u7531 c456 browser start \u8BB0\u5F55\u7684 Chrome \u8FDB\u7A0B\u3002");
+    clearDaemonStateFile();
+    return;
+  }
+  killProcessTree(st.pid);
+  clearDaemonStateFile();
+  console.log(`\u2705 \u5DF2\u53D1\u9001\u7ED3\u675F\u4FE1\u53F7\uFF08pid ${st.pid}\uFF09\u3002\u82E5\u7A97\u53E3\u4ECD\u5728\uFF0C\u8BF7\u7A0D\u5019\u6216\u624B\u52A8\u5173\u95ED\u3002`);
+});
+browserCmd.command("status").description("\u67E5\u770B CLI \u6258\u7BA1\u7684 Chrome / CDP \u662F\u5426\u5728\u8FD0\u884C").action(async () => {
+  const st = await loadReconciledDaemonState();
+  if (!st) {
+    console.log("\u72B6\u6001\uFF1A\u672A\u8FD0\u884C\uFF08\u65E0\u6709\u6548 browser-daemon.json\uFF09");
+    return;
+  }
+  console.log("\u72B6\u6001\uFF1A\u8FD0\u884C\u4E2D");
+  console.log(`  CDP: ${st.cdpHttp}`);
+  console.log(`  port: ${st.port}`);
+  console.log(`  pid: ${st.pid}`);
+  console.log(`  userDataDir: ${st.userDataDir}`);
+});
+var browser_default = browserCmd;
+
+// src/commands/screenshot.js
+import fs6 from "node:fs";
+import path4 from "node:path";
+import crypto from "node:crypto";
+import { Command as Command10 } from "commander";
+import { chromium } from "playwright-core";
+function parseViewport(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d+)\s*[xX]\s*(\d+)$/);
+  if (!m) return null;
+  return { width: Number(m[1]), height: Number(m[2]) };
+}
+function assertHttpUrl(u) {
+  let url;
+  try {
+    url = new URL(u);
+  } catch {
+    throw new Error("URL \u65E0\u6548");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("\u4EC5\u652F\u6301 http(s) URL");
+  }
+  return url.toString();
+}
+var INVALID_FILE_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g;
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+function localTimestamp(d = /* @__PURE__ */ new Date()) {
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+function inferScreenshotOutputPath(urlString, cwd = process.cwd()) {
+  const u = new URL(urlString);
+  let slug = u.hostname;
+  if (u.pathname && u.pathname !== "/") {
+    const pathPart = u.pathname.replace(/\/+/g, "-").replace(/^-|-$/g, "");
+    if (pathPart) {
+      slug += `-${pathPart}`;
+    }
+  }
+  slug = slug.replace(INVALID_FILE_CHARS, "_").replace(/_+/g, "_").replace(/^\.+/, "");
+  if (!slug || slug === "_") {
+    slug = "screenshot";
+  }
+  const max = 120;
+  if (slug.length > max) {
+    slug = `${slug.slice(0, max - 10)}_${slug.slice(-8)}`;
+  }
+  const name = `${slug}_${localTimestamp()}.png`;
+  return path4.resolve(cwd, name);
+}
+async function sleep(ms) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+async function captureWithCdp(cdpHttp, targetUrl, outPath, captureOpts) {
+  const browser = await chromium.connectOverCDP(cdpHttp);
+  try {
+    const context = browser.contexts()[0];
+    if (!context) {
+      throw new Error("\u672A\u627E\u5230\u9ED8\u8BA4 browser context\uFF08CDP \u5F02\u5E38\uFF09");
+    }
+    const page = await context.newPage();
+    try {
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+      if (captureOpts.waitAfterMs > 0) {
+        await sleep(captureOpts.waitAfterMs);
+      }
+      await page.screenshot({
+        path: outPath,
+        fullPage: captureOpts.fullPage
+      });
+    } finally {
+      await page.close().catch(() => {
+      });
+    }
+  } finally {
+    await browser.close().catch(() => {
+    });
+  }
+}
+async function captureEphemeral(targetUrl, outPath, captureOpts) {
+  const chromePath = resolveChromeExecutable();
+  if (!chromePath) {
+    console.error(chromeExecutableHint());
+    process.exit(1);
+  }
+  ensureC456CacheDir();
+  const sessionId = crypto.randomUUID();
+  const userDataDir = path4.join(
+    getC456CacheDir(),
+    "chrome-ephemeral",
+    sessionId
+  );
+  fs6.mkdirSync(userDataDir, { recursive: true });
+  const port = await getFreePort();
+  const { child } = spawnChromeWithCdp(chromePath, { userDataDir, port });
+  let browser;
+  try {
+    await waitForCdpHttp(port);
+    browser = await chromium.connectOverCDP(cdpHttpUrl(port));
+    const context = browser.contexts()[0];
+    if (!context) throw new Error("\u672A\u627E\u5230\u9ED8\u8BA4 browser context");
+    const page = await context.newPage();
+    if (captureOpts.viewport) {
+      await page.setViewportSize(captureOpts.viewport);
+    }
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+    if (captureOpts.waitAfterMs > 0) {
+      await sleep(captureOpts.waitAfterMs);
+    }
+    await page.screenshot({ path: outPath, fullPage: captureOpts.fullPage });
+    await page.close().catch(() => {
+    });
+  } catch (e) {
+    try {
+      await browser?.close();
+    } catch {
+    }
+    killProcessTree(child.pid);
+    await sleep(400);
+    try {
+      fs6.rmSync(userDataDir, { recursive: true, force: true });
+    } catch {
+    }
+    throw e;
+  }
+  try {
+    await browser?.close();
+  } catch {
+  }
+  killProcessTree(child.pid);
+  await sleep(400);
+  try {
+    fs6.rmSync(userDataDir, { recursive: true, force: true });
+  } catch {
+  }
+}
+var screenshotCmd = new Command10("screenshot").name("screenshot").description("\u6253\u5F00 URL \u5E76\u622A\u56FE\uFF08\u9ED8\u8BA4\u590D\u7528 c456 browser start\uFF1B\u5426\u5219\u4E00\u6B21\u6027\u542F\u52A8\u5E76\u5173\u95ED\uFF09").argument("<url>", "\u8981\u6253\u5F00\u7684 http(s) \u5730\u5740").option(
+  "-o, --output <path>",
+  "\u8F93\u51FA\u56FE\u7247\u8DEF\u5F84\uFF08\u5EFA\u8BAE .png\uFF09\uFF1B\u7701\u7565\u5219\u6839\u636E URL \u751F\u6210\u5B89\u5168\u6587\u4EF6\u540D + \u672C\u5730\u65F6\u95F4\u6233\uFF0C\u5199\u5165\u5F53\u524D\u76EE\u5F55"
+).option("-f, --full-page", "\u6574\u9875\u957F\u622A\u56FE", false).option(
+  "--viewport <WxH>",
+  "\u89C6\u53E3\u5927\u5C0F\uFF0C\u5982 1280x720\uFF08\u4EC5\u5BF9\u4E00\u6B21\u6027\u4F1A\u8BDD\u751F\u6548\uFF1B\u590D\u7528\u5DF2\u542F\u52A8 Chrome \u65F6\u6CBF\u7528\u7A97\u53E3\u5C3A\u5BF8\uFF09"
+).option(
+  "--wait-after-load <ms>",
+  "\u9875\u9762 domcontentloaded \u540E\u518D\u7B49\u5F85\u7684\u6BEB\u79D2\u6570\uFF08\u9ED8\u8BA4 3000\uFF0C\u4FBF\u4E8E JS/\u52A8\u753B\u6E32\u67D3\uFF09\uFF1B\u8BBE\u4E3A 0 \u5219\u4E0D\u989D\u5916\u7B49\u5F85",
+  "3000"
+).option(
+  "--no-reuse",
+  "\u4E0D\u590D\u7528 browser start \u7684\u5B9E\u4F8B\uFF0C\u59CB\u7EC8\u5355\u72EC\u8D77 Chrome \u5E76\u5728\u7ED3\u675F\u540E\u5173\u95ED\u3001\u5220\u9664\u4E34\u65F6 profile"
+).action(async (urlArg, opts) => {
+  try {
+    const targetUrl = assertHttpUrl(urlArg);
+    const outPath = opts.output != null && String(opts.output).trim() !== "" ? path4.resolve(process.cwd(), String(opts.output).trim()) : inferScreenshotOutputPath(targetUrl, process.cwd());
+    const waitAfterMs = Number.parseInt(String(opts.waitAfterLoad), 10);
+    const wait = Number.isFinite(waitAfterMs) ? Math.max(0, waitAfterMs) : 3e3;
+    const viewport = parseViewport(opts.viewport);
+    const fullPage = Boolean(opts.fullPage);
+    const reuse = opts.reuse !== false;
+    const captureOpts = { fullPage, waitAfterMs: wait, viewport };
+    if (reuse) {
+      const daemon = await loadReconciledDaemonState();
+      if (daemon) {
+        await captureWithCdp(daemon.cdpHttp, targetUrl, outPath, {
+          fullPage,
+          waitAfterMs: wait,
+          viewport: null
+        });
+        console.log(`\u2705 \u5DF2\u622A\u56FE\uFF08\u590D\u7528 CDP ${daemon.cdpHttp}\uFF09\u2192 ${outPath}`);
+        return;
+      }
+    }
+    await captureEphemeral(targetUrl, outPath, captureOpts);
+    console.log(`\u2705 \u5DF2\u622A\u56FE\uFF08\u4E00\u6B21\u6027\u4F1A\u8BDD\uFF0C\u5DF2\u5173\u95ED\uFF09\u2192 ${outPath}`);
+  } catch (e) {
+    console.error(e?.message || e);
+    process.exit(1);
+  }
+});
+var screenshot_default = screenshotCmd;
+
+// src/commands/config.js
+import fs7 from "node:fs";
+import { Command as Command11 } from "commander";
+var GLOBAL_OPT = "-g, --global";
+var GLOBAL_DESC = "\u8BFB\u5199\u7528\u6237\u5168\u5C40\u914D\u7F6E\uFF08XDG ~/.config/c456\uFF09\uFF0C\u4E0D\u5199\u5165\u5F53\u524D\u9879\u76EE\u7684 .c456-cli";
+var configCmd = new Command11().name("config").description("\u914D\u7F6E\u7BA1\u7406 - \u8BBE\u7F6E API Key \u548C\u7CFB\u7EDF\u5730\u5740\uFF08\u9ED8\u8BA4\u5199\u5165\u9879\u76EE .c456-cli\uFF1B\u52A0 -g \u5199\u5165\u5168\u5C40\uFF09");
+configCmd.command("set-key").description("\u8BBE\u7F6E API Key").argument("<token>", "API Key \u4EE4\u724C").option(GLOBAL_OPT, GLOBAL_DESC).action(async (token, opts) => {
+  const global = opts.global === true;
+  await saveConfigPatch({ apiKey: token }, { global });
+  const target = global ? getGlobalConfigPath() : resolveLocalConfigWritePath();
+  console.log(`\u2705 API Key \u5DF2\u4FDD\u5B58\u81F3 ${target}`);
   console.log(`   \u63D0\u793A\uFF1A\u4E5F\u53EF\u901A\u8FC7 C456_API_KEY \u73AF\u5883\u53D8\u91CF\u8BBE\u7F6E`);
 });
-configCmd.command("set-url").description("\u8BBE\u7F6E C456 \u7CFB\u7EDF\u5730\u5740").argument("<url>", "\u7CFB\u7EDF\u5730\u5740\uFF08\u5982 https://c456.com\uFF09").action((url, cmd) => {
-  const config = loadConfig();
-  config.baseUrl = url;
-  saveConfig(config);
+configCmd.command("set-url").description("\u8BBE\u7F6E C456 \u7CFB\u7EDF\u5730\u5740").argument("<url>", "\u7CFB\u7EDF\u5730\u5740\uFF08\u5982 https://c456.com\uFF09").option(GLOBAL_OPT, GLOBAL_DESC).action(async (url, opts) => {
+  const global = opts.global === true;
+  await saveConfigPatch({ baseUrl: url }, { global });
+  const target = global ? getGlobalConfigPath() : resolveLocalConfigWritePath();
   console.log(`\u2705 \u7CFB\u7EDF\u5730\u5740\u5DF2\u8BBE\u7F6E\u4E3A\uFF1A${url}`);
+  console.log(`   \u5DF2\u5199\u5165\uFF1A${target}`);
   console.log(`   \u63D0\u793A\uFF1A\u4E5F\u53EF\u901A\u8FC7 C456_URL \u73AF\u5883\u53D8\u91CF\u8BBE\u7F6E`);
 });
-configCmd.command("show").description("\u663E\u793A\u5F53\u524D\u914D\u7F6E").action(() => {
-  const config = loadConfig();
-  console.log("\u5F53\u524D\u914D\u7F6E\uFF1A");
-  console.log(`  \u7CFB\u7EDF\u5730\u5740\uFF1A${config.baseUrl || "https://c456.com"}`);
-  console.log(`  API Key\uFF1A${config.apiKey ? config.apiKey.slice(0, 8) + "..." : "(\u672A\u8BBE\u7F6E)"}`);
+configCmd.command("show").description("\u663E\u793A\u5F53\u524D\u6709\u6548\u914D\u7F6E\u53CA\u914D\u7F6E\u6587\u4EF6\u8DEF\u5F84").option(GLOBAL_OPT, "\u4EC5\u67E5\u770B\u5168\u5C40\u914D\u7F6E\u6587\u4EF6\u4E2D\u7684\u5185\u5BB9\uFF08\u4E0D\u5408\u5E76\u9879\u76EE\u8986\u76D6\uFF09").action((opts) => {
+  const globalOnly = opts.global === true;
+  if (globalOnly) {
+    const p = getGlobalConfigPath();
+    let raw = {};
+    try {
+      raw = JSON.parse(fs7.readFileSync(p, "utf-8"));
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) raw = {};
+    } catch {
+      raw = {};
+    }
+    console.log("\u5168\u5C40\u914D\u7F6E\u6587\u4EF6\u5185\u5BB9\uFF1A");
+    console.log(`  \u7CFB\u7EDF\u5730\u5740\uFF1A${raw.baseUrl || "(\u672A\u8BBE\u7F6E\uFF0C\u5408\u5E76\u540E\u9ED8\u8BA4 https://c456.com)"}`);
+    console.log(`  API Key\uFF1A${raw.apiKey ? String(raw.apiKey).slice(0, 8) + "..." : "(\u672A\u8BBE\u7F6E)"}`);
+    console.log(`
+\u6587\u4EF6\uFF1A${p}`);
+    return;
+  }
+  const { merged, globalPath, localPath, workspaceRoot } = loadMergedConfigSources();
+  console.log("\u5F53\u524D\u6709\u6548\u914D\u7F6E\uFF08\u9879\u76EE\u8986\u76D6\u5168\u5C40\uFF0C\u73AF\u5883\u53D8\u91CF\u4F18\u5148\u4E8E\u6587\u4EF6\uFF09\uFF1A");
+  console.log(`  \u7CFB\u7EDF\u5730\u5740\uFF1A${merged.baseUrl || "https://c456.com"}`);
+  console.log(`  API Key\uFF1A${merged.apiKey ? String(merged.apiKey).slice(0, 8) + "..." : "(\u672A\u8BBE\u7F6E)"}`);
   console.log(`
-\u914D\u7F6E\u6587\u4EF6\uFF1A~/.config/c456/config.json`);
+\u5168\u5C40\u914D\u7F6E\uFF1A${globalPath}`);
+  if (workspaceRoot) {
+    console.log(`\u5DE5\u4F5C\u533A\u6839\uFF1A${workspaceRoot}`);
+    console.log(
+      `\u9879\u76EE\u914D\u7F6E\uFF1A${localPath}${localPath && fs7.existsSync(localPath) ? "" : "\uFF08\u5C1A\u672A\u521B\u5EFA\uFF0C\u6709\u6548\u503C\u6765\u81EA\u5168\u5C40\uFF09"}`
+    );
+  } else {
+    console.log(
+      `\u9879\u76EE\u914D\u7F6E\uFF1A\u672A\u68C0\u6D4B\u5230\u81EA cwd \u5411\u4E0A\u7684 .c456-cli\uFF1B\u65E0 C456_WORKSPACE \u65F6\uFF0C\u9ED8\u8BA4\u53EF\u5199\u5165\u8DEF\u5F84\u4E3A ${resolveLocalConfigWritePath()}`
+    );
+  }
 });
-configCmd.command("reset").description("\u91CD\u7F6E\u914D\u7F6E\uFF08\u5220\u9664\u914D\u7F6E\u6587\u4EF6\uFF09").option("-f, --force", "\u5F3A\u5236\u91CD\u7F6E\uFF08\u65E0\u9700\u786E\u8BA4\uFF09").action(async (opts) => {
-  const fs = await import("node:fs");
+configCmd.command("reset").description("\u91CD\u7F6E\u914D\u7F6E\uFF08\u5220\u9664\u5BF9\u5E94\u8303\u56F4\u5185\u7684\u914D\u7F6E\u6587\u4EF6\uFF09").option(GLOBAL_OPT, GLOBAL_DESC).option("-f, --force", "\u5F3A\u5236\u91CD\u7F6E\uFF08\u65E0\u9700\u786E\u8BA4\uFF09").action(async (opts) => {
+  const fs9 = await import("node:fs");
+  const global = opts.global === true;
+  const targetPath = global ? getGlobalConfigPath() : resolveLocalConfigWritePath();
   if (!opts.force) {
     const readline = await import("node:readline");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((resolve) => {
-      rl.question("\u786E\u8BA4\u5220\u9664\u914D\u7F6E\u6587\u4EF6\uFF1F(y/N): ", (ans) => {
+      rl.question(`\u786E\u8BA4\u5220\u9664\u914D\u7F6E\u6587\u4EF6\uFF1F
+  ${targetPath}
+(y/N): `, (ans) => {
         rl.close();
         resolve(ans.toLowerCase());
       });
@@ -1233,14 +1846,125 @@ configCmd.command("reset").description("\u91CD\u7F6E\u914D\u7F6E\uFF08\u5220\u96
       return;
     }
   }
-  if (fs.existsSync(CONFIG_PATH)) {
-    fs.unlinkSync(CONFIG_PATH);
-    console.log("\u2705 \u914D\u7F6E\u6587\u4EF6\u5DF2\u5220\u9664");
+  if (fs9.existsSync(targetPath)) {
+    fs9.unlinkSync(targetPath);
+    console.log(`\u2705 \u5DF2\u5220\u9664\uFF1A${targetPath}`);
   } else {
     console.log("\u914D\u7F6E\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u65E0\u9700\u5220\u9664");
   }
 });
 var config_default = configCmd;
+
+// src/commands/skill.js
+import path5 from "node:path";
+import { Command as Command12 } from "commander";
+
+// src/lib/runNpxSkills.js
+import { spawn as spawn2 } from "node:child_process";
+function runNpxSkillsAdd(source, opts = {}) {
+  const {
+    cwd = process.cwd(),
+    global = false,
+    agent = "cursor",
+    copy = false,
+    fullDepth = false,
+    skill = "c456-cli"
+  } = opts;
+  const args = ["--yes", "skills", "add", source, "--skill", skill, "-y"];
+  if (global) args.push("-g");
+  if (agent) {
+    args.push("--agent", agent);
+  }
+  if (copy) args.push("--copy");
+  if (fullDepth) args.push("--full-depth");
+  return new Promise((resolve, reject) => {
+    const child = spawn2("npx", args, {
+      cwd,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env: process.env
+    });
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const sig = signal ? ` signal=${signal}` : "";
+      reject(new Error(`npx skills add \u9000\u51FA\u7801 ${code ?? "?"}${sig}`));
+    });
+  });
+}
+
+// src/commands/skill.js
+var REMOTE_SOURCES = [
+  { source: "xiaohui-zhangxh/c456-cli", fullDepth: false },
+  { source: "xiaohui-zhangxh/c456", fullDepth: true }
+];
+function buildSkillsOpts(opts) {
+  const agent = String(opts.agent ?? "cursor").trim() || "cursor";
+  return {
+    cwd: path5.resolve(String(opts.cwd || process.cwd())),
+    global: Boolean(opts.global),
+    agent,
+    copy: Boolean(opts.copy)
+  };
+}
+async function installSkillFromRemotes(skillId, base) {
+  let lastErr;
+  for (const { source, fullDepth } of REMOTE_SOURCES) {
+    try {
+      console.error(`\u2192 npx skills add ${source} --skill ${skillId} \u2026`);
+      await runNpxSkillsAdd(source, { ...base, fullDepth, skill: skillId });
+      console.log(`\u2705 \u5DF2\u901A\u8FC7 npx skills \u5B89\u88C5 ${skillId}\uFF08\u6765\u6E90\uFF1A${source}\uFF09`);
+      return;
+    } catch (e) {
+      lastErr = e;
+      console.error(`   \u5931\u8D25\uFF1A${e?.message || e}`);
+    }
+  }
+  console.error(
+    `\u9519\u8BEF\uFF1A\u65E0\u6CD5\u901A\u8FC7 npx skills \u4ECE GitHub \u5B89\u88C5 ${skillId}\uFF08\u5DF2\u5C1D\u8BD5 xiaohui-zhangxh/c456-cli \u4E0E xiaohui-zhangxh/c456\uFF09\u3002\u8BF7\u68C0\u67E5\u7F51\u7EDC\u3001\u4EE3\u7406\u4E0E\u4ED3\u5E93\u53EF\u8BBF\u95EE\u6027\u3002`
+  );
+  if (lastErr) {
+    console.error(`\u6700\u540E\u9519\u8BEF\uFF1A${lastErr.message || lastErr}`);
+  }
+  process.exit(1);
+}
+var skillCmd = new Command12("skill").name("skill").description("\u5B89\u88C5 c456-cli \u6280\u80FD\uFF1A\u5C01\u88C5\u5B98\u65B9 npx skills add\uFF08\u4EC5\u4ECE\u7F51\u7EDC\u62C9\u53D6\uFF09");
+skillCmd.command("install").description(
+  "npx skills add\uFF1A\u9ED8\u8BA4\u53EA\u88C5 c456-cli\uFF08GitHub \u6E90\u4F9D\u6B21\u5C1D\u8BD5\uFF09\uFF1B\u52A0 --with-wiki \u65F6\u5148\u88C5 karpathy-wiki \u4E0E c456-llm-wiki\uFF0C\u518D\u88C5 c456-cli"
+).option(
+  "-C, --cwd <path>",
+  "\u6267\u884C skills \u7684\u5DE5\u4F5C\u76EE\u5F55\uFF08\u9ED8\u8BA4\u5F53\u524D\u76EE\u5F55\uFF1B\u5177\u4F53\u5199\u5165\u8DEF\u5F84\u7531 skills CLI \u4E0E\u5404 Agent \u7EA6\u5B9A\uFF09"
+).option("-g, --global", "\u4F20\u7ED9 skills add\uFF1A\u5B89\u88C5\u5230\u7528\u6237\u7EA7\u6280\u80FD\u76EE\u5F55", false).option(
+  "-a, --agent <names>",
+  "\u4F20\u7ED9 skills add --agent\uFF08\u5982 cursor\u3001claude-code \u7B49\uFF09\uFF0C\u9ED8\u8BA4 cursor",
+  "cursor"
+).option("--copy", "\u4F20\u7ED9 skills add\uFF1A\u590D\u5236\u6587\u4EF6\u800C\u975E symlink", false).option(
+  "--with-wiki",
+  "\u79C1\u4EBA\u77E5\u8BC6\u5E93\uFF1A\u5148\u88C5 karpathy-wiki\uFF08baklib-tools/skills\uFF09\uFF0C\u518D\u88C5 c456-llm-wiki \u4E0E c456-cli\uFF08\u5747\u7ECF npx \u4ECE\u7F51\u7EDC\u62C9\u53D6\uFF09",
+  false
+).action(async (opts) => {
+  const base = buildSkillsOpts(opts);
+  if (opts.withWiki) {
+    try {
+      console.error("\u2192 npx skills add baklib-tools/skills --skill karpathy-wiki \u2026");
+      await runNpxSkillsAdd("baklib-tools/skills", {
+        ...base,
+        skill: "karpathy-wiki",
+        fullDepth: false
+      });
+      console.log("\u2705 \u5DF2\u5B89\u88C5 karpathy-wiki\uFF08Karpathy Wiki \u76EE\u5F55\u7EA6\u5B9A\uFF09");
+    } catch (e) {
+      console.error(`karpathy-wiki \u5B89\u88C5\u5931\u8D25\uFF1A${e?.message || e}`);
+      process.exit(1);
+    }
+    await installSkillFromRemotes("c456-llm-wiki", base);
+  }
+  await installSkillFromRemotes("c456-cli", base);
+});
+var skill_default = skillCmd;
 
 // src/banner.js
 import cfonts from "cfonts";
@@ -1289,8 +2013,123 @@ ${body}
 `;
 }
 
+// src/lib/npmLatestVersion.js
+async function fetchNpmLatestVersion(packageName = "c456-cli") {
+  const url = `https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json" },
+    redirect: "follow"
+  });
+  if (!res.ok) {
+    throw new Error(`registry \u54CD\u5E94 ${res.status}`);
+  }
+  const data = await res.json();
+  const v = data?.version;
+  if (!v || typeof v !== "string") {
+    throw new Error("registry \u8FD4\u56DE\u65E0 version \u5B57\u6BB5");
+  }
+  return v;
+}
+
+// src/lib/cliUpdateState.js
+import fs8 from "node:fs";
+function readRaw() {
+  const p = getVersionCheckStatePath();
+  try {
+    return JSON.parse(fs8.readFileSync(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function loadUpdateState() {
+  const raw = readRaw();
+  if (!raw || typeof raw !== "object") {
+    return { lastCheckDay: "", pendingNotifyVersion: "" };
+  }
+  return {
+    lastCheckDay: typeof raw.lastCheckDay === "string" ? raw.lastCheckDay : "",
+    pendingNotifyVersion: typeof raw.pendingNotifyVersion === "string" ? raw.pendingNotifyVersion : ""
+  };
+}
+function writeUpdateState(state) {
+  ensureC456CacheDir();
+  const p = getVersionCheckStatePath();
+  fs8.writeFileSync(p, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+}
+function patchUpdateState(partial) {
+  const cur = loadUpdateState();
+  writeUpdateState({ ...cur, ...partial });
+}
+
+// src/lib/semverGt.js
+function semverGt(a, b) {
+  const pa = String(a).split(".").map((x) => Number.parseInt(x, 10) || 0);
+  const pb = String(b).split(".").map((x) => Number.parseInt(x, 10) || 0);
+  const n = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < n; i += 1) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+}
+
+// src/lib/localCalendarDay.js
+function localCalendarDay() {
+  const d = /* @__PURE__ */ new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// src/startup.js
+function printPendingUpdateNotice(currentVersion) {
+  const st = loadUpdateState();
+  const pending = st.pendingNotifyVersion?.trim();
+  if (!pending) return;
+  if (!semverGt(pending, currentVersion)) {
+    patchUpdateState({ pendingNotifyVersion: "" });
+    return;
+  }
+  console.error("");
+  console.error(
+    `[c456-cli] \u6709\u65B0\u7248\u672C ${pending}\uFF08\u5F53\u524D ${currentVersion}\uFF09\u3002\u53EF\u6267\u884C\uFF1Anpm i -g c456-cli`
+  );
+  console.error("");
+  patchUpdateState({ pendingNotifyVersion: "" });
+}
+function scheduleDailyNpmVersionCheck(currentVersion) {
+  const today = localCalendarDay();
+  const st = loadUpdateState();
+  if (st.lastCheckDay === today) return;
+  setImmediate(() => {
+    void (async () => {
+      let latest;
+      try {
+        latest = await fetchNpmLatestVersion("c456-cli");
+      } catch {
+        patchUpdateState({ lastCheckDay: today });
+        return;
+      }
+      const patch = { lastCheckDay: today };
+      if (semverGt(latest, currentVersion)) {
+        patch.pendingNotifyVersion = latest;
+      }
+      patchUpdateState(patch);
+    })();
+  });
+}
+function runCliStartupHooks({ currentVersion }) {
+  if (process.env.C456_SKIP_VERSION_CHECK === "1") return;
+  printPendingUpdateNotice(currentVersion);
+  scheduleDailyNpmVersionCheck(currentVersion);
+}
+
 // src/index.js
-var program = new Command10();
+var program = new Command13();
 program.name("c456").description("C456 CLI - \u5FEB\u901F\u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177").version(package_default.version);
 program.addHelpText("before", () => {
   const banner = getHelpBanner();
@@ -1317,7 +2156,7 @@ program.exitOverride((err) => {
 });
 program.option(
   "-B, --base-url <url>",
-  "C456 \u7AD9\u70B9\u6839\u5730\u5740\uFF1B\u672A\u4F20\u5219\u4F7F\u7528 C456_URL \u73AF\u5883\u53D8\u91CF\u6216 ~/.config/c456/config.json \u7684 baseUrl\uFF0C\u9ED8\u8BA4 https://c456.com"
+  "C456 \u7AD9\u70B9\u6839\u5730\u5740\uFF1B\u672A\u4F20\u5219\u4F7F\u7528 C456_URL\uFF0C\u5176\u6B21\u5408\u5E76\u8BFB\u53D6 ~/.config/c456 \u4E0E\u81EA cwd \u5411\u4E0A\u627E\u5230\u7684 .c456-cli/config.json\uFF0C\u9ED8\u8BA4 https://c456.com"
 );
 program.addCommand(signal_default);
 program.addCommand(tool_default);
@@ -1327,8 +2166,11 @@ program.addCommand(search_default);
 program.addCommand(playbook_default);
 program.addCommand(walkthrough_default);
 program.addCommand(asset_default);
+program.addCommand(browser_default);
+program.addCommand(screenshot_default);
 program.addCommand(intake_default);
 program.addCommand(config_default);
+program.addCommand(skill_default);
 program.on("--help", () => {
   console.log("\n\u793A\u4F8B:");
   console.log("  # \u914D\u7F6E API Key");
@@ -1340,8 +2182,14 @@ program.on("--help", () => {
   console.log("  # \u641C\u7D22\u6536\u5F55");
   console.log('  c456 search signals -q "AI agent"');
   console.log("");
+  console.log("  # \u5B89\u88C5 Agent \u6280\u80FD\uFF08\u5C01\u88C5 npx skills add\uFF1B\u77E5\u8BC6\u5E93\u4E00\u6761\u88C5\u9F50\u8BF7\u52A0 --with-wiki\uFF09");
+  console.log("  c456 skill install --with-wiki");
+  console.log("");
   console.log("\u73AF\u5883\u53D8\u91CF:");
   console.log("  C456_URL        - \u7AD9\u70B9\u6839\u5730\u5740\uFF08\u4E0E -B / --base-url \u4E00\u81F4\uFF09");
   console.log("  C456_API_KEY    - API Key");
+  console.log("  C456_WORKSPACE  - \u5DE5\u4F5C\u533A\u6839\u76EE\u5F55\uFF08\u7EDD\u5BF9\u8DEF\u5F84\uFF09\uFF0C\u5176\u4E0B .c456-cli/config.json \u8986\u76D6\u5168\u5C40\u914D\u7F6E");
+  console.log("  C456_SKIP_VERSION_CHECK=1 - \u8DF3\u8FC7\u6BCF\u65E5 npm \u7248\u672C\u68C0\u67E5\u4E0E\u66F4\u65B0\u63D0\u793A");
 });
+runCliStartupHooks({ currentVersion: package_default.version });
 program.parse();

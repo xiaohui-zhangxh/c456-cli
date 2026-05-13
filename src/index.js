@@ -13,8 +13,12 @@ import searchCmd from "./commands/search.js";
 import playbookCmd from "./commands/playbook.js";
 import walkthroughCmd from "./commands/walkthrough.js";
 import assetCmd from "./commands/asset.js";
+import browserCmd from "./commands/browser.js";
+import screenshotCmd from "./commands/screenshot.js";
 import configCmd from "./commands/config.js";
+import skillCmd from "./commands/skill.js";
 import { getHelpBanner } from "./banner.js";
+import { runCliStartupHooks } from "./startup.js";
 
 const program = new Command();
 
@@ -49,7 +53,7 @@ program.exitOverride((err) => {
 // 全局选项（子命令仍可用 -u 表示「目标 URL」等，故根级用 -B / --base-url 表示站点根地址）
 program.option(
   "-B, --base-url <url>",
-  "C456 站点根地址；未传则使用 C456_URL 环境变量或 ~/.config/c456/config.json 的 baseUrl，默认 https://c456.com"
+  "C456 站点根地址；未传则使用 C456_URL，其次合并读取 ~/.config/c456 与自 cwd 向上找到的 .c456-cli/config.json，默认 https://c456.com"
 );
 
 // 子命令
@@ -61,8 +65,11 @@ program.addCommand(searchCmd);
 program.addCommand(playbookCmd);
 program.addCommand(walkthroughCmd);
 program.addCommand(assetCmd);
+program.addCommand(browserCmd);
+program.addCommand(screenshotCmd);
 program.addCommand(intakeCmd); // AI 入口：自动识别类型并路由（与 5 大类并存）
 program.addCommand(configCmd);
+program.addCommand(skillCmd);
 
 // 帮助信息增强
 program.on("--help", () => {
@@ -76,9 +83,15 @@ program.on("--help", () => {
   console.log("  # 搜索收录");
   console.log('  c456 search signals -q "AI agent"');
   console.log("");
+  console.log("  # 安装 Agent 技能（封装 npx skills add；知识库一条装齐请加 --with-wiki）");
+  console.log("  c456 skill install --with-wiki");
+  console.log("");
   console.log("环境变量:");
   console.log("  C456_URL        - 站点根地址（与 -B / --base-url 一致）");
   console.log("  C456_API_KEY    - API Key");
+  console.log("  C456_WORKSPACE  - 工作区根目录（绝对路径），其下 .c456-cli/config.json 覆盖全局配置");
+  console.log("  C456_SKIP_VERSION_CHECK=1 - 跳过每日 npm 版本检查与更新提示");
 });
 
+runCliStartupHooks({ currentVersion: pkg.version });
 program.parse();

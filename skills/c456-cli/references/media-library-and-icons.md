@@ -17,6 +17,8 @@
 
 ## 把图片插入收录/打法/讲解正文
 
+若图片来自 **`c456 screenshot`** 或自建 Playwright 脚本（对产品页或渠道页的截屏），建议先按 [product-screenshots-for-intake.md](product-screenshots-for-intake.md) 保存到 `.tmp/` 再走下列步骤（**不用**浏览器 MCP，降低配置成本）。
+
 1. `c456 asset upload -f ./figure.png` → 终端会打印 **`markdownSnippet`**（一行 Markdown 图片，title 内含 `c456:asset/<id>`）。
 2. 将该行（或经编辑器合并后的段落）写入 **`body`**：创建/更新收录或打法时用 **`--body-file`** 传入整篇 Markdown，**不要**在 shell 里直接塞多行引号。
 3. 预览 URL 会过期时，对整篇 Markdown 跑 `c456 asset refresh-markdown --body-file note.md > note.new.md` 再写回。

@@ -26,15 +26,15 @@ bun install
 | `src/commands/` | 各子命令实现 |
 | `scripts/build.js` | esbuild 打包脚本 |
 | `dist/index.js` | 构建产物；`package.json` 的 `bin.c456` 指向此文件 |
-| `skills/c456-cli/` | Agent 技能包（`SKILL.md`，兼容 `npx skills add`） |
-| `.cursor/skills/c456-cli` | 指向 `skills/c456-cli` 的符号链接，供 Cursor 读取 |
+| `skills/c456-cli/` | Agent 技能包（`SKILL.md`，与 `npx skills add` 兼容） |
+| `.cursor/skills/c456-cli` | 开发时常见：由 `skills add` 生成的链接或副本之一（具体因 Agent 而异） |
 
 ## AI Agent 技能
 
-本仓库提供 **`skills/c456-cli`**，可通过 [Skills CLI](https://skills.sh/) 安装到其他项目，供 Cursor、Claude Code 等客户端使用：
+本仓库提供 **`skills/c456-cli`**，可通过 [Skills CLI](https://skills.sh/) 安装到其他项目，供 **Cursor、Claude Code、OpenCode** 等主流 Agent 客户端使用：
 
 ```bash
-# 安装到当前项目（写入各 Agent 的技能目录）
+# 安装到当前项目（由 skills CLI 写入各 Agent 约定目录）
 npx skills add xiaohui-zhangxh/c456-cli --skill c456-cli -y
 
 # 仅列出包内技能，不安装
@@ -43,7 +43,7 @@ npx skills add xiaohui-zhangxh/c456-cli -l
 
 已克隆本仓库时，可在仓库根目录执行 `npx skills add . --skill c456-cli -y` 做本地校验或安装到别处。
 
-若 Windows 上符号链接不可用，可将 `skills/c456-cli` **复制**到 `.cursor/skills/c456-cli`。
+若 Windows 上符号链接不可用，可将 `skills/c456-cli` **复制**到对应 Agent 的技能目录（如 `.cursor/skills/c456-cli`）。
 
 ## 本地开发
 
