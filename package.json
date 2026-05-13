@@ -8,8 +8,6 @@
   },
   "files": [
     "dist",
-    "docs",
-    "skills",
     "README.md"
   ],
   "scripts": {
