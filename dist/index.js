@@ -6,7 +6,7 @@ import { Command as Command13 } from "commander";
 // package.json
 var package_default = {
   name: "c456-cli",
-  version: "0.4.0",
+  version: "0.5.0",
   description: "C456 CLI - \u5185\u5BB9\u5F55\u5165\u4E0E\u6574\u7406\u5DE5\u5177",
   type: "module",
   bin: {
@@ -14,8 +14,6 @@ var package_default = {
   },
   files: [
     "dist",
-    "docs",
-    "skills",
     "README.md"
   ],
   scripts: {
@@ -1643,6 +1641,94 @@ function inferScreenshotOutputPath(urlString, cwd = process.cwd()) {
 async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
+function isGithubComHost(urlString) {
+  let u;
+  try {
+    u = new URL(urlString);
+  } catch {
+    return false;
+  }
+  const h = u.hostname.toLowerCase();
+  return h === "github.com" || h === "www.github.com";
+}
+var GITHUB_FILES_TABLE_SELECTOR = 'table[aria-labelledby="folders-and-files"], [aria-labelledby="folders-and-files"]';
+async function maybeHideGithubFilesTable(page, targetUrl, captureOpts) {
+  if (captureOpts.keepGithubFilesTable) {
+    return;
+  }
+  if (!isGithubComHost(targetUrl)) {
+    return;
+  }
+  try {
+    await page.waitForSelector(GITHUB_FILES_TABLE_SELECTOR, {
+      timeout: 15e3,
+      state: "attached"
+    });
+  } catch {
+  }
+  let hidden = 0;
+  try {
+    hidden = await page.evaluate(() => {
+      const sels = [
+        'table[aria-labelledby="folders-and-files"]',
+        '[aria-labelledby="folders-and-files"]'
+      ];
+      const seen = /* @__PURE__ */ new Set();
+      let n = 0;
+      for (const sel of sels) {
+        for (const el of document.querySelectorAll(sel)) {
+          if (seen.has(el)) {
+            continue;
+          }
+          seen.add(el);
+          el.style.setProperty("display", "none", "important");
+          n += 1;
+        }
+      }
+      return n;
+    });
+  } catch (e) {
+    console.error(`[c456 screenshot] GitHub \u9690\u85CF\u6587\u4EF6\u8868\u5931\u8D25\uFF1A${e?.message || e}`);
+    return;
+  }
+  if (hidden === 0) {
+    console.error(
+      "[c456 screenshot] \u63D0\u793A\uFF1A\u672A\u627E\u5230\u53EF\u9690\u85CF\u7684\u6587\u4EF6\u8868\u8282\u70B9\uFF08\u9875\u9762\u672A\u542B\u8BE5\u7ED3\u6784\u3001\u4ECD\u5728\u9AA8\u67B6\u3001\u6216 GitHub DOM \u5DF2\u6539\u7248\uFF09\u3002\u53EF\u52A0 --pause \u5728\u6D4F\u89C8\u5668\u91CC\u624B\u52A8\u68C0\u67E5\uFF1B\u4E0D\u9700\u8981\u9690\u85CF\u65F6\u53EF\u7528 --keep-github-files-table\u3002"
+    );
+  }
+}
+async function waitForEnterFromStdin(message) {
+  const readline = await import("node:readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  await new Promise((resolve) => {
+    rl.question(message, () => {
+      rl.close();
+      resolve(void 0);
+    });
+  });
+}
+async function captureScreenshotPipeline(page, targetUrl, outPath, captureOpts) {
+  const waitUntil = isGithubComHost(targetUrl) ? "load" : "domcontentloaded";
+  await page.goto(targetUrl, { waitUntil, timeout: 12e4 });
+  if (captureOpts.waitAfterMs > 0) {
+    await sleep(captureOpts.waitAfterMs);
+  }
+  await maybeHideGithubFilesTable(page, targetUrl, captureOpts);
+  if (captureOpts.pause) {
+    await waitForEnterFromStdin(
+      "\uFF08\u8C03\u8BD5\uFF09\u5DF2\u5728\u6D4F\u89C8\u5668\u4E2D\u5B8C\u6210\u52A0\u8F7D\u4E0E GitHub \u9690\u85CF\u5904\u7406\uFF1B\u68C0\u67E5\u9875\u9762\u540E\u6309 Enter \u7EE7\u7EED\u622A\u56FE\u2026\n"
+    );
+  }
+  await page.screenshot({
+    path: outPath,
+    fullPage: captureOpts.fullPage
+  });
+  if (captureOpts.pause) {
+    await waitForEnterFromStdin(
+      "\uFF08\u8C03\u8BD5\uFF09\u622A\u56FE\u5DF2\u5199\u5165\uFF1B\u6309 Enter \u5173\u95ED\u672C\u6807\u7B7E\u9875\u5E76\u7ED3\u675F CLI\uFF08\u4E00\u6B21\u6027\u4F1A\u8BDD\u4E0B\u968F\u540E\u4F1A\u9000\u51FA Chrome\uFF09\u2026\n"
+    );
+  }
+}
 async function captureWithCdp(cdpHttp, targetUrl, outPath, captureOpts) {
   const browser = await chromium.connectOverCDP(cdpHttp);
   try {
@@ -1652,14 +1738,7 @@ async function captureWithCdp(cdpHttp, targetUrl, outPath, captureOpts) {
     }
     const page = await context.newPage();
     try {
-      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-      if (captureOpts.waitAfterMs > 0) {
-        await sleep(captureOpts.waitAfterMs);
-      }
-      await page.screenshot({
-        path: outPath,
-        fullPage: captureOpts.fullPage
-      });
+      await captureScreenshotPipeline(page, targetUrl, outPath, captureOpts);
     } finally {
       await page.close().catch(() => {
       });
@@ -1695,11 +1774,7 @@ async function captureEphemeral(targetUrl, outPath, captureOpts) {
     if (captureOpts.viewport) {
       await page.setViewportSize(captureOpts.viewport);
     }
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-    if (captureOpts.waitAfterMs > 0) {
-      await sleep(captureOpts.waitAfterMs);
-    }
-    await page.screenshot({ path: outPath, fullPage: captureOpts.fullPage });
+    await captureScreenshotPipeline(page, targetUrl, outPath, captureOpts);
     await page.close().catch(() => {
     });
   } catch (e) {
@@ -1739,6 +1814,14 @@ var screenshotCmd = new Command10("screenshot").name("screenshot").description("
 ).option(
   "--no-reuse",
   "\u4E0D\u590D\u7528 browser start \u7684\u5B9E\u4F8B\uFF0C\u59CB\u7EC8\u5355\u72EC\u8D77 Chrome \u5E76\u5728\u7ED3\u675F\u540E\u5173\u95ED\u3001\u5220\u9664\u4E34\u65F6 profile"
+).option(
+  "--keep-github-files-table",
+  "github.com \u4E0A\u4FDD\u7559\u300C\u6587\u4EF6\u4E0E\u76EE\u5F55\u300D\u8868\u683C\uFF08\u9ED8\u8BA4\u4F1A\u9690\u85CF\u8BE5\u8868\u4EE5\u4FBF\u622A\u56FE\u7A81\u51FA README\uFF09",
+  false
+).option(
+  "--pause",
+  "\u8C03\u8BD5\uFF1A\u622A\u56FE\u524D\u540E\u5728\u7EC8\u7AEF\u6309 Enter \u518D\u7EE7\u7EED\uFF1B\u671F\u95F4\u4E0D\u5173\u95ED\u6807\u7B7E\u9875\uFF0C\u4FBF\u4E8E\u5728\u6D4F\u89C8\u5668\u91CC\u68C0\u67E5 DOM\uFF08\u9700\u4EA4\u4E92\u5F0F\u7EC8\u7AEF\uFF09",
+  false
 ).action(async (urlArg, opts) => {
   try {
     const targetUrl = assertHttpUrl(urlArg);
@@ -1748,14 +1831,28 @@ var screenshotCmd = new Command10("screenshot").name("screenshot").description("
     const viewport = parseViewport(opts.viewport);
     const fullPage = Boolean(opts.fullPage);
     const reuse = opts.reuse !== false;
-    const captureOpts = { fullPage, waitAfterMs: wait, viewport };
+    const keepGithubFilesTable = Boolean(opts.keepGithubFilesTable);
+    const pause = Boolean(opts.pause);
+    if (pause && !process.stdin.isTTY) {
+      console.error("\u9519\u8BEF\uFF1A--pause \u4EC5\u5728\u4EA4\u4E92\u5F0F\u7EC8\u7AEF\uFF08stdin \u4E3A TTY\uFF09\u4E0B\u53EF\u7528");
+      process.exit(1);
+    }
+    const captureOpts = {
+      fullPage,
+      waitAfterMs: wait,
+      viewport,
+      keepGithubFilesTable,
+      pause
+    };
     if (reuse) {
       const daemon = await loadReconciledDaemonState();
       if (daemon) {
         await captureWithCdp(daemon.cdpHttp, targetUrl, outPath, {
           fullPage,
           waitAfterMs: wait,
-          viewport: null
+          viewport: null,
+          keepGithubFilesTable,
+          pause
         });
         console.log(`\u2705 \u5DF2\u622A\u56FE\uFF08\u590D\u7528 CDP ${daemon.cdpHttp}\uFF09\u2192 ${outPath}`);
         return;

@@ -172,6 +172,12 @@ c456 browser start
 # 复用该实例截图（默认加载后再等 3s 再截，可用 --wait-after-load 0 取消）
 c456 screenshot "https://example.com/app" -o ./.tmp/example.png
 
+# github.com 仓库页：默认隐藏 README 上方的「文件与目录」表格，便于首屏突出说明文档；需要保留表格时加 --keep-github-files-table
+c456 screenshot "https://github.com/owner/repo" -o ./.tmp/repo.png
+
+# 调试：截图前后在终端按 Enter，期间保留标签页便于在 DevTools 里看 DOM（需交互式终端）
+c456 screenshot "https://github.com/owner/repo" -o ./.tmp/repo.png --pause
+
 # 用完关闭并释放记录
 c456 browser stop
 ```

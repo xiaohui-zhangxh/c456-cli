@@ -77,7 +77,7 @@ npx skills add . --skill c456-cli -y
 7. **自媒体账号默认收录为渠道**：用户要收录 **YouTube / 抖音 / 小红书 / B 站 / 微博** 等**自媒体账号主页或频道**时，**默认使用 `c456 intake new -k channel`**（不要用 `-k tool`），并配合 `-u <主页或频道 URL>`；需要服务端按 URL 自动填资料段时再加 `--auto-resolve-url`。仅做「不落库的 URL 资料预览/抓取」时用 `c456 fetch profile -p social_account -u "<url>"`。
 8. **渠道（及 tool）必须带至少一条「资料」**：`-k channel` 或 `-k tool` 时，服务端要求 **profile_data 里至少有一条资料段**（例如主页 **URL**、**媒体账号** 等对应 facet），常见做法是 `-u <url>` 并加 **`--auto-resolve-url`** 让服务端生成资料段；如需手写 **`--profile-data-json`**，**必须先阅读** [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（含各 `profile_id`、必填字段与最小 JSON 示例）。**不能只写标题/正文而不提供 URL/资料段**，否则会 **422 校验失败**（提示含「至少添加一个资料段或图标」等）。
 9. **素材库与列表图标**：上传、插入正文、设置 tool/channel 列表图标（`list_icon_url`）见 [references/media-library-and-icons.md](references/media-library-and-icons.md)；CLI：`c456 asset …`、`c456 intake update … --profile-data-json-file`。
-10. **工具 / 渠道介绍里的产品截图**：优先 **`c456 browser start`**（持久 profile：`~/.cache/c456-cli/chrome-profile`，可保留登录态）→ 需要时在窗口内登录 → **`c456 screenshot <url> [-o .tmp/…]`** 复用 CDP；结束用 **`c456 browser stop`**。无长会话时可只跑 **`c456 screenshot <url>`**（可省略 **`-o`**，在当前目录按 URL 生成文件名）。然后 **`c456 asset upload`** → **`markdownSnippet`** 写入 **`--body-file`**。详见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)（**不用** IDE MCP；不强制安装 Playwright 自带 Chromium，见 README）。
+10. **工具 / 渠道介绍里的产品截图**：优先 **`c456 browser start`**（持久 profile：`~/.cache/c456-cli/chrome-profile`，可保留登录态）→ 需要时在窗口内登录 → **`c456 screenshot <url> [-o .tmp/…]`** 复用 CDP；结束用 **`c456 browser stop`**。无长会话时可只跑 **`c456 screenshot <url>`**（可省略 **`-o`**，在当前目录按 URL 生成文件名）。然后 **`c456 asset upload`** → **`markdownSnippet`** 写入 **`--body-file`**。**产品官网 / 落地页首屏类截图一律只做视窗截图**：**不要**加 **`-f` / `--full-page`**（默认即为视口高度；整页长图上传后素材处理与阅读体验均易变差）。**仅当**收录时的**产品链接**为 **RubyGems / npm 等包注册表页**（如 **`-u`** 或资料中的包页 URL），并需要**基于该包页**为介绍配截图时：**`c456 screenshot` 的 URL 优先**用 **`c456 fetch profile -p package_registry -u "<该包页完整 URL>"`** 解析出的 **GitHub 仓库根页**（`https://github.com/owner/repo`），**不要**优先直接对 **rubygems.org/gems/…** 或 **www.npmjs.com/package/…** 截图（侧栏多、README 首屏弱；仓库页与 CLI 隐藏文件表一致）。若产品链接已是 **GitHub / 官网 / 文档站**等，或用户**指定了其它截图目标 URL**，则**按该 URL 截图**，**不适用**本条「包页 → GitHub」规则。详见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)（**不用** IDE MCP；不强制安装 Playwright 自带 Chromium，见 README）。
 
 ## 命令速查
 
@@ -92,7 +92,7 @@ npx skills add . --skill c456-cli -y
 **浏览器（系统 Chrome + CDP）**
 
 - `c456 browser start [-p 端口]` · `stop` · `status`（持久 profile 默认 `~/.cache/c456-cli/chrome-profile`）
-- `c456 screenshot <url> [-o <path>] [--full-page] [--viewport 1280x720] [--wait-after-load ms] [--no-reuse]`（默认 **`--wait-after-load 3000`** 便于 JS/动画；`0` 为不等待；省略 `-o` 时按 URL 生成文件名；默认复用 `browser start`）
+- `c456 screenshot <url> [-o <path>] [--full-page] [--viewport 1280x720] [--wait-after-load ms] [--no-reuse] [--keep-github-files-table]`（默认 **`--wait-after-load 3000`**；**github.com** 默认隐藏 README 上方「文件与目录」表格以突出说明；**产品官网介绍勿加 `--full-page`**，保持视窗截图）
 
 **收录 `intake`**
 
@@ -120,7 +120,7 @@ npx skills add . --skill c456-cli -y
 
 **资料 `fetch`**
 
-- `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）
+- `c456 fetch profile -u <url> -p <profile_id>`（`profile_id` 必填；否则 API 返回「不支持的资料类型」）。**仅当**你要以**包页 URL 作为产品链接**去截介绍图、且已对该 URL 使用 **`package_registry`** 拉元数据时：若解析结果中含 **GitHub 仓库** 链接，**`c456 screenshot` 可优先使用该仓库根 URL**（非此场景勿生搬），见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)。
 
 `profile_id` 类型含义：
 
@@ -149,6 +149,6 @@ CLI `--help` 中会用 `type: <type_name>` 标注字段类型；Agent 在生成/
 - **自媒体 / 社交账号**（主页、频道页）：**一律按渠道收录** → `-k channel`；抖音场景补充说明见 [references/douyin-channel-intake.md](references/douyin-channel-intake.md)。
 - **渠道 / 工具**：新建时务必带上 **至少一种结构化资料**（常见：`-u` + `--auto-resolve-url`，或 `--profile-data-json`），否则服务端会因缺少资料段而拒绝保存。
 - **`--profile-data-json`**：键名与校验规则与 Web 端一致，**不要编造字段**；完整说明与示例见 [references/intake-profile-data-json.md](references/intake-profile-data-json.md)（优先自动解析，其次再手写）。**仅改列表图标**见 [references/media-library-and-icons.md](references/media-library-and-icons.md)。
-- **软件 / 产品 / 仓库 / 包页**：一般用 `-k tool`（或用户明确要当「工具资料」收录时）。
-- **产品界面进介绍**：优先 **`c456 browser` + `c456 screenshot`**（见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)）→ `asset upload` → `body`（`--body-file`）；**不用** IDE MCP。
+- **软件 / 产品 / 仓库 / 包页**：一般用 `-k tool`（或用户明确要当「工具资料」收录时）。**仅当** **`-u` 或资料中的「产品链接」** 为 **RubyGems / npm 等包注册表页**，且需要**基于该包页**为正文配产品截图时，**`c456 screenshot` 优先**对 **`c456 fetch profile -p package_registry -u "<该包页>"`** 解析出的 **GitHub 仓库根页**截图；包站主要作解析入口。**产品链接非包页**（已是 GitHub、独立官网等）或用户指定其它截图目标时，**按实际 URL**，勿套用本条。详见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)「包管理器」节。
+- **产品界面进介绍**：优先 **`c456 browser` + `c456 screenshot`**（见 [references/product-screenshots-for-intake.md](references/product-screenshots-for-intake.md)）→ `asset upload` → `body`（`--body-file`）；**不用** IDE MCP。**官网 / 落地页截图仅视窗**，勿 `-f`。
 

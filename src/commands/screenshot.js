@@ -78,6 +78,121 @@ async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+function isGithubComHost(urlString) {
+  let u;
+  try {
+    u = new URL(urlString);
+  } catch {
+    return false;
+  }
+  const h = u.hostname.toLowerCase();
+  return h === "github.com" || h === "www.github.com";
+}
+
+/** GitHub 文件表常见选择器（`aria-labelledby` 指向 `#folders-and-files` 的 h2） */
+const GITHUB_FILES_TABLE_SELECTOR =
+  'table[aria-labelledby="folders-and-files"], [aria-labelledby="folders-and-files"]';
+
+/**
+ * 开源项目主页截图时弱化目录树：在 github.com 用 DOM 内联样式隐藏文件表（避免页面 CSP 拒绝 Playwright 注入的 style 元素）。
+ * React 往往在 `domcontentloaded` 之后才挂载表格，故由调用方对 github 使用更晚的 `load` + 可选 `waitForSelector`。
+ * @param {import("playwright-core").Page} page
+ * @param {string} targetUrl
+ * @param {{ keepGithubFilesTable?: boolean }} captureOpts
+ */
+async function maybeHideGithubFilesTable(page, targetUrl, captureOpts) {
+  if (captureOpts.keepGithubFilesTable) {
+    return;
+  }
+  if (!isGithubComHost(targetUrl)) {
+    return;
+  }
+  try {
+    await page.waitForSelector(GITHUB_FILES_TABLE_SELECTOR, {
+      timeout: 15_000,
+      state: "attached",
+    });
+  } catch {
+    // 非仓库页或改版：仍尝试 evaluate，避免静默无操作
+  }
+
+  let hidden = 0;
+  try {
+    hidden = await page.evaluate(() => {
+      const sels = [
+        'table[aria-labelledby="folders-and-files"]',
+        '[aria-labelledby="folders-and-files"]',
+      ];
+      const seen = new Set();
+      let n = 0;
+      for (const sel of sels) {
+        for (const el of document.querySelectorAll(sel)) {
+          if (seen.has(el)) {
+            continue;
+          }
+          seen.add(el);
+          el.style.setProperty("display", "none", "important");
+          n += 1;
+        }
+      }
+      return n;
+    });
+  } catch (e) {
+    console.error(`[c456 screenshot] GitHub 隐藏文件表失败：${e?.message || e}`);
+    return;
+  }
+  if (hidden === 0) {
+    console.error(
+      "[c456 screenshot] 提示：未找到可隐藏的文件表节点（页面未含该结构、仍在骨架、或 GitHub DOM 已改版）。可加 --pause 在浏览器里手动检查；不需要隐藏时可用 --keep-github-files-table。",
+    );
+  }
+}
+
+async function waitForEnterFromStdin(message) {
+  const readline = await import("node:readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  await new Promise((resolve) => {
+    rl.question(message, () => {
+      rl.close();
+      resolve(undefined);
+    });
+  });
+}
+
+/**
+ * @param {import("playwright-core").Page} page
+ * @param {string} targetUrl
+ * @param {string} outPath
+ * @param {{
+ *   fullPage: boolean
+ *   waitAfterMs: number
+ *   keepGithubFilesTable?: boolean
+ *   pause?: boolean
+ * }} captureOpts
+ */
+async function captureScreenshotPipeline(page, targetUrl, outPath, captureOpts) {
+  const waitUntil = isGithubComHost(targetUrl) ? "load" : "domcontentloaded";
+  await page.goto(targetUrl, { waitUntil, timeout: 120_000 });
+  if (captureOpts.waitAfterMs > 0) {
+    await sleep(captureOpts.waitAfterMs);
+  }
+  await maybeHideGithubFilesTable(page, targetUrl, captureOpts);
+  if (captureOpts.pause) {
+    await waitForEnterFromStdin(
+      "（调试）已在浏览器中完成加载与 GitHub 隐藏处理；检查页面后按 Enter 继续截图…\n",
+    );
+  }
+  await page.screenshot({
+    path: outPath,
+    fullPage: captureOpts.fullPage,
+  });
+  if (captureOpts.pause) {
+    await waitForEnterFromStdin(
+      "（调试）截图已写入；按 Enter 关闭本标签页并结束 CLI（一次性会话下随后会退出 Chrome）…\n",
+    );
+  }
+}
+
 async function captureWithCdp(cdpHttp, targetUrl, outPath, captureOpts) {
   const browser = await chromium.connectOverCDP(cdpHttp);
   try {
@@ -87,14 +202,7 @@ async function captureWithCdp(cdpHttp, targetUrl, outPath, captureOpts) {
     }
     const page = await context.newPage();
     try {
-      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-      if (captureOpts.waitAfterMs > 0) {
-        await sleep(captureOpts.waitAfterMs);
-      }
-      await page.screenshot({
-        path: outPath,
-        fullPage: captureOpts.fullPage,
-      });
+      await captureScreenshotPipeline(page, targetUrl, outPath, captureOpts);
     } finally {
       await page.close().catch(() => {});
     }
@@ -131,11 +239,7 @@ async function captureEphemeral(targetUrl, outPath, captureOpts) {
     if (captureOpts.viewport) {
       await page.setViewportSize(captureOpts.viewport);
     }
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-    if (captureOpts.waitAfterMs > 0) {
-      await sleep(captureOpts.waitAfterMs);
-    }
-    await page.screenshot({ path: outPath, fullPage: captureOpts.fullPage });
+    await captureScreenshotPipeline(page, targetUrl, outPath, captureOpts);
     await page.close().catch(() => {});
   } catch (e) {
     try {
@@ -188,6 +292,16 @@ const screenshotCmd = new Command("screenshot")
     "--no-reuse",
     "不复用 browser start 的实例，始终单独起 Chrome 并在结束后关闭、删除临时 profile",
   )
+  .option(
+    "--keep-github-files-table",
+    "github.com 上保留「文件与目录」表格（默认会隐藏该表以便截图突出 README）",
+    false,
+  )
+  .option(
+    "--pause",
+    "调试：截图前后在终端按 Enter 再继续；期间不关闭标签页，便于在浏览器里检查 DOM（需交互式终端）",
+    false,
+  )
   .action(async (urlArg, opts) => {
     try {
       const targetUrl = assertHttpUrl(urlArg);
@@ -201,8 +315,20 @@ const screenshotCmd = new Command("screenshot")
       const viewport = parseViewport(opts.viewport);
       const fullPage = Boolean(opts.fullPage);
       const reuse = opts.reuse !== false;
+      const keepGithubFilesTable = Boolean(opts.keepGithubFilesTable);
+      const pause = Boolean(opts.pause);
+      if (pause && !process.stdin.isTTY) {
+        console.error("错误：--pause 仅在交互式终端（stdin 为 TTY）下可用");
+        process.exit(1);
+      }
 
-      const captureOpts = { fullPage, waitAfterMs: wait, viewport };
+      const captureOpts = {
+        fullPage,
+        waitAfterMs: wait,
+        viewport,
+        keepGithubFilesTable,
+        pause,
+      };
 
       if (reuse) {
         const daemon = await loadReconciledDaemonState();
@@ -211,6 +337,8 @@ const screenshotCmd = new Command("screenshot")
             fullPage,
             waitAfterMs: wait,
             viewport: null,
+            keepGithubFilesTable,
+            pause,
           });
           console.log(`✅ 已截图（复用 CDP ${daemon.cdpHttp}）→ ${outPath}`);
           return;
