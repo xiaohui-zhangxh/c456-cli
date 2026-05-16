@@ -16,7 +16,7 @@ import assetCmd from "./commands/asset.js";
 import browserCmd from "./commands/browser.js";
 import screenshotCmd from "./commands/screenshot.js";
 import configCmd from "./commands/config.js";
-import skillCmd from "./commands/skill.js";
+import skillCmd from "./commands/skills.js";
 import { getHelpBanner } from "./banner.js";
 import { runCliStartupHooks } from "./startup.js";
 
@@ -83,7 +83,9 @@ program.on("--help", () => {
   console.log("  # 搜索收录");
   console.log('  c456 search signals -q "AI agent"');
   console.log("");
-  console.log("  # 安装 Agent 技能（封装 npx skills add；知识库一条装齐请加 --with-wiki）");
+  console.log("  # 安装 Agent 技能（交互 / 传 id / --with-wiki）");
+  console.log("  c456 skill install");
+  console.log("  c456 skill install c456-signal-researcher c456-sync-public-markdown");
   console.log("  c456 skill install --with-wiki");
   console.log("");
   console.log("环境变量:");

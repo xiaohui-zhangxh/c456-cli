@@ -37,21 +37,13 @@ bunx c456-cli --help
 
 ### Agent 技能（`c456 skill install`）
 
-已全局安装 **c456-cli** 且本机可用 **`npx`** 后，在**目标项目根**执行：
+已全局安装 **c456-cli** 且本机可用 **`npx`** 后，在目标项目根执行 `c456 skill install`。交互终端下为多选（含 **取消安装**）；传技能 id 或加 **`--with-wiki`** 则不经菜单。常用参数：**`-C`**、**`-g`**、**`-a`**、**`--copy`**（与 `skills add` 一致）。私人知识库三件套见 [private-knowledge-base.md §3](./docs/private-knowledge-base.md)。
 
 ```bash
 c456 skill install
+c456 skill install c456-signal-product-vs c456-signal-researcher
+c456 skill install --with-wiki
 ```
-
-封装 **`npx skills add`** 从 GitHub 拉取技能。默认只装 **c456-cli**，**`--with-wiki`** 会依次装 **karpathy-wiki**、**c456-llm-wiki** 与 **c456-cli**，适合私人知识库一条命令装齐（见 [private-knowledge-base.md §3](./docs/private-knowledge-base.md)）。
-
-常用参数（透传给 `skills add`）：
-
-- **`--with-wiki`**：额外安装 karpathy-wiki + c456-llm-wiki
-- **`-C, --cwd <path>`**：在哪个目录下解析「项目级」安装（默认当前目录；具体路径由 skills CLI 决定）
-- **`-g, --global`**：用户级技能目录
-- **`-a, --agent`**：目标 Agent（如 `cursor`、`claude-code` 等），默认 `cursor`；与 `skills add` 一致
-- **`--copy`**：复制文件而非 symlink
 
 ## 配置
 

@@ -25,21 +25,22 @@ description: >-
 c456 skill install
 ```
 
-私人知识库场景可**一条命令**装齐 **karpathy-wiki**、**c456-llm-wiki** 与 **c456-cli**：
+- **交互终端**：多选菜单（**取消安装** 在列表末尾）；**`c456-cli` 必选**；**`karpathy-wiki`** 与 **`skills/` 下 `c456-*`** 可选。
+- **免交互**：命令后接技能 id（仍含 **`c456-cli`**），例如：
+
+```bash
+c456 skill install c456-signal-product-vs c456-signal-researcher
+```
+
+- **非交互终端**（无 TTY、且未传技能 id）：仅安装 **`c456-cli`**，并在 stderr 提示可用「显式 id」方式多装。
+
+私人知识库一条装齐：
 
 ```bash
 c456 skill install --with-wiki
 ```
 
-上述流程均为 **`npx skills add` 从网络拉取**（先 `baklib-tools/skills` 的 **karpathy-wiki**，再 GitHub 源的 **c456-llm-wiki** 与 **c456-cli**）。详见 [`docs/private-knowledge-base.md`](../../docs/private-knowledge-base.md) §3。
-
-仅装 **c456-cli**、不要 Wiki 套件时：
-
-```bash
-c456 skill install
-```
-
-顺序为：仅依次尝试 **`c456-cli`** 的 GitHub 源；**失败则退出**（无本地包复制）。可用 **`-C/--cwd`**、**`-g`**、**`-a`**、**`--copy`**，语义与 `skills add` 一致（`-a` 用于指定 Agent，如 `cursor`、`claude-code` 等）。
+细节与顺序见 [`docs/private-knowledge-base.md`](../../docs/private-knowledge-base.md) §3。
 
 也可自行执行：
 
@@ -87,7 +88,7 @@ npx skills add . --skill c456-cli -y
 
 **技能 `skill`**
 
-- `c456 skill install [--with-wiki] [-C <cwd>] [-g] [-a <agent>] [--copy]`（仅 `npx skills add`；`--with-wiki` 时装 karpathy-wiki、c456-llm-wiki 与 c456-cli，见 docs/private-knowledge-base.md §3）
+- `c456 skill install [[skillIds...]] [--with-wiki] [-C <cwd>] [-g] [-a <agent>] [--copy]`（仅 `npx skills add`；无参数且为 TTY 时多选菜单；传 `skillIds` 免交互；`--with-wiki` 时装 karpathy-wiki、c456-llm-wiki 与 c456-cli，见 docs/private-knowledge-base.md §3）
 
 **浏览器（系统 Chrome + CDP）**
 
@@ -128,6 +129,17 @@ npx skills add . --skill c456-cli -y
 - `package_registry`：软件包页（npm、RubyGems 等）
 - `github_origin`：代码仓库（GitHub/GitLab/Gitee）
 - `social_account`：社交账号主页/频道（YouTube/抖音/小红书等）
+
+## 子技能（references/）
+
+| 子技能 | 用途 | 触发条件 |
+|--------|------|---------|
+| **c456-signal-researcher**（正文仅在 LLM Wiki 仓库 `.cursor/skills/c456-signal-researcher/SKILL.md`） | 以新闻研究员视角生成 signal：事实 → 价值 → 关联 → 来源 | 写信号、收录新闻、发布行业动态 |
+| [intake-profile-data-json](references/intake-profile-data-json.md) | profile_data 字段定义与校验 | 手写 `--profile-data-json` |
+| [media-library-and-icons](references/media-library-and-icons.md) | 素材库上传、正文插图、列表图标 | 配图与图标流程 |
+| [product-screenshots-for-intake](references/product-screenshots-for-intake.md) | 产品截图最佳实践 | tool/channel 收录配图 |
+| [douyin-channel-intake](references/douyin-channel-intake.md) | 抖音渠道收录特殊说明 | 抖音账号收录 |
+| [content-syntax-kramdown](references/content-syntax-kramdown.md) | C456 富文本语法 | 生成/写入正文内容 |
 
 ## 更完整的说明
 

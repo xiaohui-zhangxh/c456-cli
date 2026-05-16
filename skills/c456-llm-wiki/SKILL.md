@@ -3,8 +3,10 @@ name: c456-llm-wiki
 description: >-
   将 Karpathy LLM Wiki 三层架构与 C456.com 双向同步结合的知识库管理规范。
   支持 raw/wiki/c456-sync 四层架构、多对多映射、双向同步、自动 Ingest。
+  撰写 c456-sync 与上行正文时须符合仓库 AGENTS.md §1.2–1.3；处理远端已删本地仍存须符合 §6.5（orphan_local：清单 + 用户确认）。
   Use when the user mentions LLM Wiki, C456 sync, knowledge base, c456-sync,
-  bidirectional sync, or ingesting content to wiki and c456.com.
+  bidirectional sync, orphan_local, remote-deleted local sync, or ingesting
+  content to wiki and c456.com.
 ---
 
 # LLM Wiki + C456 双向同步
@@ -12,6 +14,16 @@ description: >-
 ## 核心思想
 
 在 Karpathy LLM Wiki 三层架构（raw/wiki/schema）基础上增加 C456 双向同步层，实现本地知识库与 c456.com 之间的内容发布与拉取。
+
+## 必读：仓库根 `AGENTS.md`
+
+- **§1.2**：c456-wiki **定位、目的、受众**（收集整理 → 对外分享 → 帮互联网读者选择高价值工具与方案）。
+- **§1.3**：`c456-sync/` 与 C456 **上行正文**的六条原则——**准确性、可读性、整洁性、逻辑性、推荐性、推广性**（含与 `wiki/` 分工：镜像层单篇自洽、面向陌生读者）。
+- **§6.5**：远端记录已删、本地 `c456-sync` / `meta` / `wiki` 仍在时（**orphan_local**）——**先列清单、用户确认后再删或归档**，禁止自动删除；详见下文「orphan_local」与 `AGENTS.md` 全文。
+
+**冷启动 / 初始化目录时**：先打开仓库根 `AGENTS.md`，确认已包含 **§1.2–1.3** 与 **§6.5**（若缺失则补全后再建 `c456-sync/` 或首次 Ingest）；旧模板仅有 §1.2–1.3 时至少补 **§6.5**。可在首条 `wiki/log.md` 注明「已对齐 §1.2–1.3 / §6.5」。
+
+任何写入 **`c456-sync/`**、或组装将提交给 **`c456 intake` / `c456 playbook` 的正文** 之前，重读 **§1.3** 自检一遍。
 
 ## 四层架构
 
@@ -53,6 +65,10 @@ AGENTS.md（Schema） ← 定义 AI 如何组织 Wiki
 
 
 **关键原则**：`c456-sync/` 与 `wiki/` 之间不用 symlink。关联通过 Frontmatter 引用 + `wiki/c456-meta.yml` 实现。
+
+### c456-sync 与上行正文（执行摘要）
+
+`c456-sync/` 虽是镜像层，正文须视同 **对外读者可读版本**：事实可核对、结构清晰、有推荐结论与诚实边界、CTA 明确；细节与表格见 **`AGENTS.md` §1.3**。
 
 ---
 
@@ -167,11 +183,15 @@ date: 2026-05-08
 
 ### 双向同步
 
-**c456-sync/ 目录**：作为 C456 镜像层，按五类型分目录存储。
+**c456-sync/ 目录**：作为 C456 镜像层，按五类型分目录存储。撰写、从线上拉回后的润色、以及准备 `--body-file` 的正文，须满足 **`AGENTS.md` §1.3**。
 
 **关联方式**：`c456-sync/` 文件 Frontmatter 标注 `local-wiki-source`、`local-wiki-entities` 等字段；`wiki/` 页面 Frontmatter 标注 `c456-id`、`c456-sync-path`；`wiki/c456-meta.yml` 记录总索引。
 
 **双向索引**：`wiki/index.md` 中已发布条目可标注 `[c456:#id]`。C456 正文可保留回链到本地 Wiki 的链接。
+
+### 远程已删、本地仍存（orphan_local）
+
+见仓库根 **`AGENTS.md` §6.5**：须先向用户输出 **待删除/待处理清单** 并取得 **明确确认** 后，方可删除 `c456-sync/` 或调整 `wiki/` 与 `c456-meta.yml`；可选路径含删镜像、wiki 归档、`meta` 去幽灵 id、或 `intake new` 重发。
 
 ### 状态流转
 
@@ -227,7 +247,7 @@ C456 ↔ 本地映射总索引。记录每个 C456 ID 的 `sync_path`、`wiki_pa
 
 - **c456-title**：`品牌名 | 定位 · 特色后缀`
 - **c456-summary**：一句话概括核心价值
-- **正文**：包含核心功能模块表、安装方式、适用场景
+- **正文**：包含核心功能模块表、安装方式、适用场景；并自检 **`AGENTS.md` §1.3**（对外可读、可推荐、不夸大）。
 - **实体页**：包含关键属性表（官网、GitHub、stars、许可证、语言）、核心功能、差异化亮点、竞品对比
 - **来源摘要**：包含核心信息、关键功能、开源信息
 

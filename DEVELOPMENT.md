@@ -26,6 +26,7 @@ bun install
 | `src/commands/` | 各子命令实现 |
 | `scripts/build.js` | esbuild 打包脚本 |
 | `dist/index.js` | 构建产物；`package.json` 的 `bin.c456` 指向此文件 |
+| `skills/` | 多个 `c456-*` Agent 技能目录；`npm pack` 随 `package.json` 的 `files` 一并发布，`c456 skill install` 据此动态列出可选技能 |
 | `skills/c456-cli/` | Agent 技能包（`SKILL.md`，与 `npx skills add` 兼容） |
 | `.cursor/skills/c456-cli` | 开发时常见：由 `skills add` 生成的链接或副本之一（具体因 Agent 而异） |
 
